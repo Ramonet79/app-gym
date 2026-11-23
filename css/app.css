@@ -450,3 +450,34 @@ p { margin: 6px 0; }
 .tr b { font-variant-numeric: tabular-nums; }
 .tr em { font-style: normal; text-align: right; font-weight: 700; color: var(--muted); }
 .tr em.up { color: var(--c-fuerza); } .tr em.dn { color: var(--c-warm); } .tr em.st { color: var(--c-cardio); }
+
+/* ── ilustraciones v2 ── */
+.art .ground { fill: #0d1118; }
+.art .floor { stroke: #344055; stroke-width: 1.2; }
+.art .m { fill: #2a3446; stroke: #4a5a74; stroke-width: 1.1; }
+.art .mline { stroke: #4f6079; stroke-linecap: round; }
+.art .mat { fill: #1b4a47; stroke: #2a6b66; stroke-width: .8; }
+.art .cable { stroke: #c3ccd9; stroke-width: 1.2; stroke-dasharray: none; opacity: .75; }
+.art .ol > * { fill: #07090d; stroke: #07090d; stroke-width: 2.6; stroke-linejoin: round; }
+.art .shirt > * { fill: #4f74b8; }
+.art .shorts > * { fill: #2b3445; }
+.art .skin > * { fill: #efcfb2; }
+.art .shoe > * { fill: #dfe5ee; }
+.art .far { opacity: .5; }
+.art .hair { fill: #3b2c25; }
+.art .hair-top { fill: none; }
+.art .eye { fill: #1a1210; }
+.art .nose { fill: none; stroke: #b98d72; stroke-width: 1; stroke-linejoin: round; }
+.art .mus > * { fill: var(--gc, var(--accent)); }
+.art .ghost line, .art .ghost circle { stroke: var(--gc, var(--accent)); stroke-width: 1.4; fill: none; stroke-dasharray: 2.5 2.5; opacity: .55; stroke-linecap: round; }
+.art .g-path { fill: none; stroke: #fff; stroke-width: 1.4; stroke-dasharray: 3 3; opacity: .7; }
+.art .g-head { fill: #fff; opacity: .9; }
+.art .cap rect { fill: rgba(7, 9, 13, .82); stroke: var(--gc, var(--accent)); stroke-width: .7; }
+.art .cap text { fill: #f1f4f8; font-size: 7.6px; font-weight: 700; }
+.art .cap .cap-n { fill: var(--gc, var(--accent)); }
+.art .cap.c-down rect { stroke: #8fd3ff; }
+.art .cap.c-down .cap-n { fill: #8fd3ff; }
+.art .cap.c-hold rect { stroke: #4a5a74; }
+.art-wrap { position: relative; }
+.slow-badge { position: absolute; top: 8px; right: 8px; font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 99px; background: rgba(7, 9, 13, .7); color: var(--muted); border: 1px solid var(--line); pointer-events: none; }
+.slow-badge.on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }

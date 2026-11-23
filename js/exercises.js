@@ -630,6 +630,56 @@ X.triceps_unilateral.art = { ...X.triceps_polea.art, dyn: p => cable(136, 12, p.
 
 for (const [id, e] of Object.entries(EXERCISES)) e.id = id;
 
+// ───── Rótulos de fase de cada animación: [fase 1 (≈1 s), fase 2 controlada (≈2 s), pausa arriba] ─────
+const STEPS = {
+  gato_camello: ['Redondea suave', 'Hunde suave', 'Sin forzar'],
+  bird_dog: ['Estira brazo y pierna', 'Vuelve sin apoyar', 'Aguanta, lumbar quieta'],
+  plancha_lateral: ['Sube la cadera', 'Baja controlando', 'Aguanta en línea'],
+  curl_up: ['Eleva cabeza y hombros', 'Baja despacio', 'Aguanta, cuello quieto'],
+  dead_bug: ['Baja brazo y pierna (3 s)', 'Vuelve al centro', 'Lumbar pegada'],
+  pallof: ['Empuja al frente', 'Vuelve al pecho', 'Aguanta 2 s sin girar'],
+  puente: ['Sube con el glúteo', 'Baja vértebra a vértebra', 'Aprieta 2 s'],
+  plancha_frontal: ['Activa abdomen', 'Respira', 'Cuerpo en línea'],
+  press_pecho: ['Empuja exhalando', 'Vuelve en 2 s', 'Sin bloquear codos'],
+  remo_pecho: ['Codos atrás', 'Estira sin despegar el pecho', 'Junta escápulas 1 s'],
+  press_hombro: ['Empuja arriba', 'Baja a los hombros', 'Costillas abajo'],
+  face_pull: ['Tira hacia la cara', 'Vuelve despacio', 'Codos altos, abre'],
+  jalon: ['Baja al pecho', 'Sube controlando', 'Codos a los bolsillos'],
+  press_inclinado: ['Empuja arriba y al frente', 'Baja en 2 s', 'Escápulas apoyadas'],
+  remo_polea: ['Tira al ombligo', 'Vuelve con tronco quieto', 'Pausa 1 s'],
+  pec_deck: ['Junta delante', 'Abre despacio', 'Aprieta 1 s'],
+  curl_maquina: ['Sube', 'Baja en 2-3 s', 'Codos apoyados'],
+  triceps_polea: ['Estira abajo', 'Sube hasta 90º', 'Aprieta 1 s'],
+  elev_laterales: ['Sube a los hombros', 'Baja despacio', 'Codos algo doblados'],
+  press_mancuernas: ['Empuja arriba', 'Baja al pecho en 2 s', 'Sin chocarlas'],
+  flexiones_inclinadas: ['Empuja', 'Baja en bloque', 'Cuerpo en tabla'],
+  remo_mancuerna: ['Codo a la cadera', 'Baja estirando', 'Tronco sin girar'],
+  remo_invertido: ['Pecho a la barra', 'Baja en bloque', 'Junta escápulas'],
+  press_hombro_mancuernas: ['Empuja arriba', 'Baja a las orejas', 'Espalda apoyada'],
+  pajaros_maquina: ['Abre atrás', 'Vuelve despacio', 'Junta escápulas 1 s'],
+  y_inclinado: ['Sube en Y', 'Baja despacio', 'Pecho apoyado'],
+  jalon_neutro: ['Baja al pecho', 'Sube estirando', 'Codos pegados'],
+  dominada_asistida: ['Sube el pecho', 'Baja en 3 s', 'Barbilla arriba'],
+  press_inclinado_mancuernas: ['Empuja arriba', 'Baja en 2 s', 'Lumbar apoyada'],
+  remo_polea_unilateral: ['Codo atrás', 'Vuelve sin girar', 'Pausa 1 s'],
+  cruce_poleas: ['Junta delante', 'Abre despacio', 'Codos fijos'],
+  curl_mancuernas_inclinado: ['Sube girando la palma', 'Baja en 2-3 s', 'Codos quietos'],
+  curl_polea: ['Sube', 'Baja despacio', 'Codos pegados'],
+  triceps_maquina: ['Empuja abajo', 'Sube despacio', 'Espalda apoyada'],
+  triceps_unilateral: ['Estira abajo', 'Sube hasta 90º', 'Codo quieto'],
+  laterales_maquina: ['Codos hacia fuera', 'Baja despacio', 'Hombros abajo'],
+  laterales_polea: ['Sube al lado', 'Baja en 2-3 s', 'Tronco quieto'],
+};
+for (const e of Object.values(EXERCISES)) {
+  if (!e.art) continue;
+  e.art.muscles = e.muscles;
+  e.art.steps = STEPS[e.id] || ['Ejecuta', 'Vuelve controlando'];
+}
+EXERCISES.remo_invertido.art.flip = true;
+// La guía sigue la cabeza cuando se mueve el cuerpo entero
+for (const id of ['dominada_asistida', 'remo_invertido', 'flexiones_inclinadas']) EXERCISES[id].art.guide = 'h';
+for (const id of ['puente', 'plancha_lateral']) EXERCISES[id].art.guide = 'hp';
+
 // ───── Variantes por patrón de movimiento ─────
 // El primero de cada lista es el ejercicio base (máquina guiada: el mejor para aprender).
 // Ejercicios principales: cambian cada 2 bloques (12 semanas). Accesorios: cada bloque (6 semanas).

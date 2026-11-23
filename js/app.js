@@ -104,7 +104,7 @@ function render() {
   else html = shell();
   app.innerHTML = html + (ui.sheet ? viewSheet() : '') + (ui.toast ? `<div class="toast ${ui.toast.kind}" role="status">${ui.toast.msg}</div>` : '');
   const a = app.querySelector('[data-anim]');
-  if (a && !ui.sheet) animate(a.querySelector('svg'), EXERCISES[a.dataset.anim].art);
+  if (a && !ui.sheet) animate(a.querySelector('svg'), EXERCISES[a.dataset.anim].art, { slow: !!ui.slow });
   document.body.classList.toggle('lock', !!ui.sheet);
 }
 
@@ -385,7 +385,7 @@ function viewRunner() {
         <span class="block-chip">${g.name} · ${blockItems.indexOf(it) + 1}/${blockItems.length}</span>
         ${ex.levels ? `<span class="lvl">Nivel ${st.level + 1}: ${ex.levels[st.level].name}</span>` : ''}
       </div>
-      <div class="art-wrap" data-anim="${it.id}">${artSVG(ex.art, 0, 'big')}</div>
+      <div class="art-wrap" data-anim="${it.id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
       <h1 class="ex-name">${ex.name}</h1>
       <p class="where">${icon('pin')} ${ex.machine}</p>
       <button class="mynote ${st.note ? '' : 'empty'}" data-a="sheet" data-s="note" data-id="${it.id}">${icon('gear')} ${st.note ? 'Mi ajuste: ' + esc(st.note) : 'Apunta tu ajuste (asiento, altura, agarre…)'}</button>
@@ -828,6 +828,8 @@ function viewLibrary() {
     }).join('')}</div>`).join('')}`;
 }
 
+const slowBadge = ex => ex.art?.B && !ex.art.at && !(ex.art.dur < 2000) ? `<span class="slow-badge ${ui.slow ? 'on' : ''}">${ui.slow ? 'Cámara lenta' : 'Toca: cámara lenta'}</span>` : '';
+
 function swapBtn(id, action, note = '', extra = '') {
   const e = EXERCISES[id];
   return `<button class="swap ${extra}" data-a="${action}" data-id="${id}"><span class="thumb">${artSVG(e.art, 1)}</span><span class="sw-txt"><b>${e.name}</b><small>${e.machine}</small>${note ? `<em>${note}</em>` : ''}</span></button>`;
@@ -848,7 +850,7 @@ function viewExercise(id) {
   const pts = exerciseSeries(id);
   return `<main class="page exd" style="--gc:${GROUPS[ex.group].color}">
     <header class="r-top"><button class="icon-btn" data-a="closeEx" aria-label="Volver">${icon('back')}</button><span class="block-chip">${GROUPS[ex.group].name}</span><span></span></header>
-    <div class="art-wrap" data-anim="${id}">${artSVG(ex.art, 0, 'big')}</div>
+    <div class="art-wrap" data-anim="${id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
     <h1 class="ex-name">${ex.name}</h1>
     <p class="where">${icon('pin')} ${ex.machine}</p>
     <div class="chips">${ex.muscles.map(m => `<span class="chip">${m}</span>`).join('')}</div>
@@ -918,7 +920,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.1</p>`;
+  <p class="muted small center ver">App Gym · v1.3</p>`;
 }
 
 function weekPrefsCard() {
@@ -1211,6 +1213,7 @@ const actions = {
   },
   pin: d => { updateSetting(d.slot, { swapTo: d.id }); save(); toast('Fijado: la app usará siempre este'); render(); },
   unpin: d => { updateSetting(d.id, { swapTo: null }); save(); toast('Vuelve a la rotación automática'); render(); },
+  slowmo: () => { ui.slow = !ui.slow; render(); },
   ciOpen: d => { ui.sheet = { type: 'checkin', kind: d.v, a: {} }; render(); },
   ciLater: () => { S.prefs.ciLater = P.todayISO(); save(); render(); },
   ci: d => {
