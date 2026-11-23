@@ -79,6 +79,23 @@ function todayInfo() {
   const plan = C.planToday({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: d, checkin: M.latestCheckin(S, d) });
   return { d, now, plan, phase: plan.phase, tpl: plan.tpl, choice: S.dayType[d] || null, done: sessionsOn(d) };
 }
+// ───────── tiempo disponible ─────────
+const pad2 = n => String(n).padStart(2, '0');
+const hhmm = d => `${d.getHours()}:${pad2(d.getMinutes())}`;
+function defaultUntil() { const d = new Date(Date.now() + 45 * 6e4); d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function untilDate(v) { const [h, m] = (v || '').split(':').map(Number); const d = new Date(); d.setHours(h || 0, m || 0, 0, 0); return d; }
+function budget() {
+  const mode = S.prefs.timeMode || 'dur';
+  if (mode === 'until') {
+    let u = S.prefs.until;
+    if (!u || untilDate(u) - Date.now() < 15 * 6e4) u = defaultUntil();
+    const min = Math.max(15, Math.min(120, Math.floor((untilDate(u) - Date.now()) / 6e4)));
+    return { mode, min, until: u };
+  }
+  return { mode, min: S.prefs.budgetMin || P.MAX_MIN };
+}
+const fmtDur = m => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ' ' + pad2(m % 60) : ''}` : `${m} min`;
+
 const REC_LABEL = { fuerza: 'Fuerza', spinning: 'Spinning', movilidad: 'Movilidad y core', descanso: 'Descanso' };
 function nextPlanned() {
   const gd = C.gymDaysOf(S.prefs);
@@ -282,8 +299,21 @@ function choiceCard(T) {
 
 function sessionPlan(T, kind) {
   const tpl = kind === 'movilidad' ? 'M' : T.tpl;
-  const plan = P.buildSession(tpl, { phase: T.phase, settings: S.settings, mode: 'normal', adj: kind === 'fuerza' ? T.plan.adj : null });
+  const plan = P.buildSession(tpl, { phase: T.phase, settings: S.settings, mode: 'normal', adj: kind === 'fuerza' ? T.plan.adj : null, budgetMin: budget().min });
   return { tpl, plan, est: P.estimateTotal(plan.items) };
+}
+
+function timeBox(est = 0, T = null) {
+  const b = budget();
+  const spare = Math.round(b.min - est / 60);
+  return `<div class="timebox">
+    <div class="tb-tabs"><button class="${b.mode === 'dur' ? 'on' : ''}" data-a="tmode" data-v="dur">${icon('clock')} Tengo…</button><button class="${b.mode === 'until' ? 'on' : ''}" data-a="tmode" data-v="until">${icon('clock')} Hasta las…</button></div>
+    ${b.mode === 'dur'
+      ? `<div class="tb-dur"><b data-budget-label>${fmtDur(b.min)}</b><input type="range" min="30" max="90" step="5" value="${b.min}" data-live="budget" aria-label="Tiempo disponible"><div class="tb-scale"><span>30'</span><span>45'</span><span>1 h</span><span>1:15</span><span>1:30</span></div></div>`
+      : `<div class="tb-until"><input type="time" value="${b.until}" data-live="until" aria-label="Hora de salida"><span>${fmtDur(b.min)} desde ahora</span></div>`}
+    <p class="small muted">${b.min < 45 ? 'Menos tiempo: quito series y complementarios; lo principal y el core se mantienen.' : b.min > 45 ? 'Más tiempo: series extra en los principales, complementarios y cardio suave al final.' : 'Sesión estándar.'} Durante la sesión recalculo según tu ritmo real.</p>
+    ${spare >= 8 ? `<p class="small tb-spare">Te sobran ${spare}'. ${T?.phase?.key === 'adapt' || T?.phase?.key === 'deload' || T?.plan?.adj?.hold ? `En ${T?.plan?.adj?.hold ? 'una sesión ajustada' : 'fase de ' + T.phase.name.toLowerCase()} no conviene más volumen de fuerza:` : 'Ya está al máximo de volumen útil:'} úsalos para caminar o movilidad.</p>` : ''}
+  </div>`;
 }
 
 function strengthCard(T, kind) {
@@ -306,7 +336,8 @@ function strengthCard(T, kind) {
     ${notes.length ? `<div class="adj">${notes.map(n => `<p>${n}</p>`).join('')}</div>` : ''}
     <div class="timeline">${blocks.map(b => `<i style="flex:${b.sec};--c:${GROUPS[b.g].color}"></i>`).join('')}</div>
     <div class="tl-legend">${blocks.map(b => `<span style="--c:${GROUPS[b.g].color}"><i></i>${GROUPS[b.g].short} ${Math.round(b.sec / 60)}'</span>`).join('')}</div>
-    <button class="btn primary xl" data-a="sheet" data-s="pain">${icon('play')} Empezar · ${Math.round(est / 60)} min</button>
+    ${timeBox(est, T)}
+    <button class="btn primary xl" data-a="sheet" data-s="pain">${icon('play')} Empezar · ${Math.round(est / 60)}' · fin ${hhmm(new Date(Date.now() + est * 1000))}</button>
     <details class="preview"><summary>Ver los ${plan.items.length} ejercicios</summary>
       <ol>${plan.items.map(i => `<li style="--c:${GROUPS[i.g].color}"><b>${EXERCISES[i.id].name}</b><span>${setsSummary(i)}</span></li>`).join('')}</ol>
     </details>
@@ -332,7 +363,7 @@ function spinCard(T) {
 function setsSummary(it) {
   const ex = EXERCISES[it.id];
   const work = it.sets.filter(s => !s.warmup);
-  if (ex.kind === 'time') return `${ex.minutes} min`;
+  if (ex.kind === 'time') return `${work[0]?.mins || ex.minutes} min`;
   const s = work[0];
   const t = P.targetText(it.id, s);
   return `${work.length} × ${t}${s.kg != null && !ex.bodyweight ? ' · ' + P.fmtKg(s.kg) + ' ' + P.kgUnit(ex) : ''}`;
@@ -374,12 +405,12 @@ function viewRunner() {
   return `<div class="runner g-${it.g}" style="--gc:${g.color}">
     <header class="r-top">
       <button class="icon-btn" data-a="sheet" data-s="exit" aria-label="Salir">${icon('x')}</button>
-      <div class="r-clock"><b data-clock>${P.fmtClock((Date.now() - Date.parse(A.startedAt)) / 1000)}</b><span>de 45:00</span></div>
+      <div class="r-clock"><b data-clock>${P.fmtClock((Date.now() - Date.parse(A.startedAt)) / 1000)}</b><span>${A.until ? 'hasta las ' + A.until.replace(/^0/, '') : 'de ' + P.fmtClock((A.budgetMin || P.MAX_MIN) * 60)}</span></div>
       <button class="icon-btn" data-a="sheet" data-s="map" aria-label="Lista">${icon('list')}</button>
     </header>
     <div class="segs">${segs}</div>
     ${A.mode !== 'normal' ? `<div class="mode-banner">${icon('warn')} ${A.mode === 'suave' ? 'Sesión suave: menos peso y series' : 'Día de protección: solo movilidad y core suave'}</div>` : ''}
-    ${proj.over > 60 && !A.expressDone ? `<button class="mode-banner warn" data-a="express">${icon('clock')} Vas a acabar en ${Math.round(proj.total / 60)}'. Toca para ajustar a 45'</button>` : ''}
+    ${proj.over > 60 ? `<button class="mode-banner warn" data-a="express">${icon('clock')} A este ritmo acabas en ${Math.round(proj.total / 60)}' (tienes ${Math.round(proj.budgetSec / 60)}'). Toca para ajustar ya</button>` : proj.pace !== 1 ? `<div class="mode-banner info">${icon('clock')} Tu ritmo: ${proj.pace > 1 ? '+' : ''}${Math.round((proj.pace - 1) * 100)} % sobre lo previsto · acabas ≈ ${hhmm(new Date(Date.now() + proj.remaining * 1000))}</div>` : ''}
     <div class="r-body">
       <div class="r-head">
         <span class="block-chip">${g.name} · ${blockItems.indexOf(it) + 1}/${blockItems.length}</span>
@@ -478,12 +509,36 @@ function restPanel(it) {
 function projection() {
   const A = S.active;
   const elapsed = (Date.now() - Date.parse(A.startedAt)) / 1000;
-  const remaining = A.items.filter(i => i.status === 'todo').reduce((a, it) => {
-    const left = { ...it, sets: it.sets.filter(s => !s.done) };
-    return a + (left.sets.length ? P.estimateItem(left) : 0);
-  }, 0);
+  const pace = sessionPace(A);
+  const remaining = P.remainingEstimate(A.items) * pace;
   const total = elapsed + remaining;
-  return { elapsed, remaining, total, over: total - P.MAX_MIN * 60 };
+  const budgetSec = (A.budgetMin || P.MAX_MIN) * 60;
+  return { elapsed, remaining, total, pace, budgetSec, over: total - budgetSec };
+}
+// Ritmo real frente al estimado (1 = como previsto; 1,2 = un 20 % más lento)
+function sessionPace(A) { return A.paceEst >= 180 ? Math.max(0.8, Math.min(1.5, A.paceAct / A.paceEst)) : 1; }
+
+// Recalcula lo que queda al terminar cada ejercicio
+function replan(doneItem) {
+  const A = S.active;
+  if (!A || A.type === 'core') return;
+  const now = Date.now();
+  if (doneItem && A.mark) {
+    const doneOnly = { ...doneItem, sets: doneItem.sets.filter(s => s.done) };
+    if (doneOnly.sets.length) { A.paceAct += (now - A.mark) / 1000; A.paceEst += P.estimateItem(doneOnly); }
+  }
+  A.mark = now;
+  const p = projection();
+  const left = p.budgetSec - p.elapsed - 20;
+  const ctx = { phase: A.phase, settings: S.settings, mode: A.mode, adj: A.adj };
+  let r = null;
+  if (p.remaining > left + 45) r = P.fitToTime(A.items, left, p.pace);
+  else if (left - p.remaining > 300) r = P.expandToTime(A.items, left, ctx, p.pace, 2); // en vivo, como mucho 2 añadidos cada vez
+  if (r?.changed) {
+    A.lastReplan = { dir: r.dir, text: r.text, at: now };
+    const msg = r.dir === 'down' ? `Vas justo de tiempo: ${r.text}` : `Vas sobrado de tiempo: ${r.text}`;
+    if (ui.toast) setTimeout(() => toast(msg, r.dir), 2700); else toast(msg, r.dir); // no pisar el aviso de progresión
+  }
 }
 
 // ───────── acciones de sesión ─────────
@@ -494,12 +549,13 @@ function startSession(tplKey, pain, type = 'fuerza', adj = null) {
   let mode = type === 'core' ? 'normal' : pain >= 5 ? 'proteccion' : pain >= 3 ? 'suave' : 'normal';
   if (type === 'movilidad' && mode === 'suave') mode = 'normal'; // la sesión de movilidad ya es suave
   const useAdj = type === 'fuerza' && mode !== 'proteccion' && adj && adj.key !== 'normal' ? adj : null;
-  const plan = P.buildSession(tplKey, { phase, settings: S.settings, mode, adj: useAdj });
+  const B = type === 'core' ? { min: P.MAX_MIN } : budget();
+  const plan = P.buildSession(tplKey, { phase, settings: S.settings, mode, adj: useAdj, budgetMin: B.min });
   const id = uid();
   const sType = mode === 'proteccion' || type === 'movilidad' ? 'movilidad' : type;
   const hold = !!(phase.hold || mode !== 'normal' || useAdj?.hold);
   const adjInfo = useAdj ? { key: useAdj.key, tag: useAdj.tag, load: useAdj.load, maxSets: useAdj.maxSets } : null;
-  S.active = { sessionId: id, type: sType, template: plan.template, mode, phase: { ...phase, hold }, adj: adjInfo, items: plan.items, idx: 0, startedAt: new Date().toISOString(), painBefore: pain, rest: null, guided: null, results: {} };
+  S.active = { sessionId: id, type: sType, template: plan.template, mode, phase: { ...phase, hold }, adj: adjInfo, items: plan.items, idx: 0, budgetMin: B.min, until: B.until || null, mark: Date.now(), paceAct: 0, paceEst: 0, startedAt: new Date().toISOString(), painBefore: pain, rest: null, guided: null, results: {} };
   S.sessions[id] = { id, date: d, type: sType, template: plan.template, phase: phase.key, mode, status: 'active', painBefore: pain, startedAt: S.active.startedAt, summary: { adj: adjInfo } };
   enqueue('session', id);
   save();
@@ -549,6 +605,7 @@ function itemComplete(it) {
 
 function advance() {
   const A = S.active;
+  replan(A.items[A.idx]);
   const n = A.items.length;
   for (let j = 1; j <= n; j++) {
     const k = (A.idx + j) % n;
@@ -920,7 +977,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.3</p>`;
+  <p class="muted small center ver">App Gym · v1.4</p>`;
 }
 
 function weekPrefsCard() {
@@ -1028,7 +1085,7 @@ function viewSheet() {
       break;
     case 'map':
       body = `<h2>Sesión de hoy</h2><p class="muted small">Toca un ejercicio para ir a él.</p><ol class="map">${S.active.items.map((it, k) => `<li><button class="s-${it.status} ${k === S.active.idx ? 'cur' : ''}" data-a="jump" data-i="${k}" style="--c:${GROUPS[it.g].color}">
-        <i></i><b>${EXERCISES[it.id].name}</b><small>${it.status === 'done' ? 'Hecho' : it.status === 'skipped' ? 'Saltado' : setsSummary(it)}</small></button></li>`).join('')}</ol>`;
+        <i></i><b>${EXERCISES[it.id].name}</b><small>${it.status === 'done' ? 'Hecho' : it.status === 'skipped' ? (it.trimmed ? 'Quitado por tiempo' : 'Saltado') : (it.extra ? 'Extra · ' : '') + setsSummary(it)}</small></button></li>`).join('')}</ol>`;
       break;
     case 'note': {
       const st = P.getSetting(S.settings, s.id);
@@ -1268,14 +1325,11 @@ const actions = {
   skipEx: () => { const A = S.active; A.items[A.idx].status = 'skipped'; A.rest = null; A.guided = null; advance(); },
   jump: d => { const A = S.active; const k = +d.i; if (A.items[k].status !== 'todo') A.items[k].status = 'todo'; A.idx = k; A.rest = null; A.guided = null; ui.sheet = null; save(); render(); scrollTo(0, 0); },
   express: () => {
-    const A = S.active;
-    const p = projection();
-    const budget = P.MAX_MIN * 60 - p.elapsed - 30;
-    const todo = A.items.filter(i => i.status === 'todo').map(it => ({ ...it, sets: it.sets.filter(s => !s.done), ref: it }));
-    P.fitToTime(todo, budget);
-    for (const t of todo) { const keep = new Set(t.sets); t.ref.sets = t.ref.sets.filter(s => s.done || keep.has(s)); }
-    A.expressDone = true; save(); toast('Ajustado: quitamos series de los últimos ejercicios');
+    const A = S.active, p = projection();
+    const r = P.fitToTime(A.items, p.budgetSec - p.elapsed - 30, p.pace);
+    save(); toast(r.changed ? `Ajustado: ${r.text}` : 'Ya está ajustado a tu tiempo'); render();
   },
+  tmode: d => { S.prefs.timeMode = d.v; if (d.v === 'until' && (!S.prefs.until || untilDate(S.prefs.until) - Date.now() < 15 * 6e4)) S.prefs.until = defaultUntil(); save(); render(); },
   techToggle: (d, el, e) => { e.preventDefault(); S.active.techOpen = !S.active.techOpen; save(); render(); },
   pauseSession: () => { ui.inSession = false; ui.sheet = null; releaseWake(); render(); },
   endNow: () => { ui.sheet = { type: 'finish' }; render(); },
@@ -1368,6 +1422,15 @@ app.addEventListener('click', e => {
   if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.dataset.a !== 'pref') return;
   const fn = actions[el.dataset.a];
   if (fn) fn(el.dataset, el, e);
+});
+
+app.addEventListener('input', e => {
+  if (e.target.dataset.live === 'budget') { const l = app.querySelector('[data-budget-label]'); if (l) l.textContent = fmtDur(+e.target.value); }
+});
+app.addEventListener('change', e => {
+  const k = e.target.dataset.live;
+  if (k === 'budget') { S.prefs.budgetMin = +e.target.value; save(); render(); }
+  if (k === 'until' && e.target.value) { S.prefs.until = e.target.value; save(); render(); }
 });
 
 // ───────── arranque ─────────

@@ -101,7 +101,7 @@ export const hasAlternatives = slot => !!ALTERNATIVES[slot];
 // ───── construcción de sesión ─────
 // mode: normal | suave (dolor 3-4) | proteccion (≥5)
 // adj: ajuste del entrenador según días sin entrenar { load, maxSets }. Los recortes no se multiplican: manda el más prudente.
-export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = null }) {
+export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = null, budgetMin = MAX_MIN }) {
   const tpl = TEMPLATES[mode === 'proteccion' ? 'M' : tplKey];
   const items = [];
   const used = new Set();
@@ -116,8 +116,11 @@ export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = n
       items.push(buildItem(id, { slot, g: b.g, phase, settings, mode, adj, first }));
     }
   }
-  fitToTime(items);
-  return { template: mode === 'proteccion' ? 'M' : tplKey, items };
+  const lim = (budgetMin - 1) * 60, ctx = { phase, settings, mode, adj };
+  if (budgetMin > MAX_MIN) adaptToTime(items, lim, ctx); // con más tiempo se amplía; con 45' o menos solo se recorta
+  else if (remainingEstimate(items) > lim) fitToTime(items, lim);
+  const out = items.filter(it => !it.trimmed);
+  return { template: mode === 'proteccion' ? 'M' : tplKey, items: out };
 }
 
 // Un ejercicio con sus series. nSets fuerza el número de series de trabajo (al cambiar de ejercicio a mitad de sesión).
@@ -150,7 +153,7 @@ export function estimateItem(it) {
   const side = ex.perSide ? 2 : 1;
   let work = 0;
   for (const s of sets) {
-    if (ex.kind === 'time') work += (ex.minutes || 2) * 60;
+    if (ex.kind === 'time') work += (s.mins || ex.minutes || 2) * 60;
     else if (ex.kind === 'hold') work += (s.hold || 20) * side + (side > 1 ? 5 : 0);
     else if (ex.kind === 'holdreps') work += (s.reps || 5) * ((s.hold || 8) + 2) * side + (side > 1 ? 5 : 0);
     else if (ex.kind === 'carry') work += (s.hold || 30) * 2 + 10;
@@ -159,19 +162,131 @@ export function estimateItem(it) {
   const rests = Math.max(0, n - 1) * (it.rest || 0);
   return work + rests + 35; // 35 s de transición/ajuste de máquina
 }
-export const estimateTotal = items => items.reduce((a, it) => a + estimateItem(it), 0);
 
-// Si no cabe en 45', recorta series de fuerza (desde los accesorios del final), nunca por debajo de 2.
-export function fitToTime(items, limitSec = (MAX_MIN - 1) * 60) {
-  let guard = 0;
-  while (estimateTotal(items) > limitSec && guard++ < 40) {
-    const cand = [...items].reverse().find(it => (it.g === 'fuerza' || it.g === 'core') && it.status === 'todo' && it.sets.filter(s => !s.warmup && !s.skipped).length > 2 - (it.g === 'core' ? 1 : 0));
-    if (!cand) break;
-    const s = [...cand.sets].reverse().find(s => !s.warmup && !s.done && !s.skipped);
-    if (!s) break;
-    s.skipped = true; s.trimmed = true;
+// ───── ajuste al tiempo disponible ─────
+// Trabaja sobre la lista completa de la sesión: solo toca lo pendiente (status 'todo' y series sin hacer).
+// Sirve para preparar la sesión y para recalcular en vivo según el ritmo real.
+const pendingSets = it => it.sets.filter(s => !s.done && !s.skipped);
+export function remainingEstimate(items) {
+  return items.filter(it => it.status === 'todo').reduce((a, it) => {
+    const left = { ...it, sets: pendingSets(it) };
+    return a + (left.sets.length ? estimateItem(left) : 0);
+  }, 0);
+}
+export const estimateTotal = items => items.reduce((a, it) => a + estimateItem(it), 0);
+const isMainSlot = it => MAIN_LIFTS.has(it.slot || it.id);
+const workLeft = it => it.sets.filter(s => !s.warmup && !s.done && !s.skipped);
+const workAll = it => it.sets.filter(s => !s.warmup && !s.skipped);
+
+export function adaptToTime(items, limitSec, ctx, pace = 1) {
+  const need = () => remainingEstimate(items) * pace;
+  if (need() > limitSec) return fitToTime(items, limitSec, pace);
+  return expandToTime(items, limitSec, ctx, pace);
+}
+
+// Recorta por prioridades: 1) lo añadido por tener tiempo extra, 2) series hasta el mínimo eficaz,
+// 3) accesorios enteros (desde el final), 4) calentamiento y vuelta a la calma más cortos. Lo principal y el core McGill se mantienen.
+export function fitToTime(items, limitSec, pace = 1) {
+  const need = () => remainingEstimate(items) * pace;
+  const log = { sets: 0, items: [] };
+  const todo = () => items.filter(it => it.status === 'todo');
+  const dropItem = it => { it.status = 'skipped'; it.trimmed = true; log.items.push(it.id); };
+  const dropSet = it => { const s = [...it.sets].reverse().find(s => !s.warmup && !s.done && !s.skipped); if (!s) return false; s.skipped = true; s.trimmed = true; log.sets++; return true; };
+  let g = 0;
+  // 1) extras: cardio final más corto o fuera, luego ejercicios extra y series extra
+  for (const it of [...todo()].reverse()) {
+    if (need() <= limitSec) break;
+    if (!it.extra) continue;
+    const ex = EXERCISES[it.id];
+    if (ex.kind === 'time' && !it.sets.some(s => s.done)) {
+      const over = Math.ceil((need() - limitSec) / 60 / pace);
+      const s0 = it.sets[0], m = (s0.mins || ex.minutes) - over;
+      if (m >= 6) { s0.mins = m; continue; }
+    }
+    if (!it.sets.some(s => s.done)) dropItem(it);
   }
-  for (const it of items) it.sets = it.sets.filter(s => !s.trimmed);
+  while (need() > limitSec && g++ < 60) { const c = [...todo()].reverse().find(it => it.sets.some(s => s.added && !s.done && !s.skipped)); if (!c) break; const s = [...c.sets].reverse().find(s => s.added && !s.done && !s.skipped); s.skipped = true; s.trimmed = true; log.sets++; }
+  // 2) series hasta el mínimo (fuerza 2, core 1); accesorios primero
+  const order = () => [...todo()].reverse().sort((a, b) => isMainSlot(a) - isMainSlot(b));
+  while (need() > limitSec && g++ < 120) {
+    const c = order().find(it => (it.g === 'fuerza' || it.g === 'core') && workLeft(it).length && workAll(it).length > (it.g === 'core' ? 1 : 2));
+    if (!c || !dropSet(c)) break;
+  }
+  // 3) accesorios enteros
+  for (const it of [...todo()].reverse()) {
+    if (need() <= limitSec) break;
+    if (it.g === 'fuerza' && !isMainSlot(it) && !it.sets.some(s => s.done)) dropItem(it);
+  }
+  // 4) calentamiento y calma más cortos
+  for (const it of todo()) {
+    if (need() <= limitSec) break;
+    const ex = EXERCISES[it.id];
+    if (ex.kind === 'time' && (it.g === 'warm' || it.g === 'calma') && !it.sets[0].done) { const s0 = it.sets[0]; s0.mins = Math.max(it.g === 'warm' ? 2 : 1, (s0.mins || ex.minutes) - 2); }
+  }
+  // 5) principales a 2 series y core a 1 (último recurso)
+  while (need() > limitSec && g++ < 160) {
+    const c = [...todo()].reverse().find(it => (it.g === 'fuerza' || it.g === 'core') && workLeft(it).length && workAll(it).length > 1 && (it.g === 'core' || workAll(it).length > 2));
+    if (!c || !dropSet(c)) break;
+  }
+  for (const it of items) it.sets = it.sets.filter(s => !s.trimmed || s.done);
+  const changed = log.sets > 0 || log.items.length > 0;
+  return { changed, dir: 'down', text: [log.sets ? `−${log.sets} ${log.sets > 1 ? 'series' : 'serie'}` : '', namesText(log.items, 'quito')].filter(Boolean).join(' y ') };
+}
+
+// Amplía con criterio cuando sobra tiempo: 1) una serie más en los principales (máx. 4),
+// 2) accesorios que equilibran (hombro posterior, brazos, laterales, core), 3) cardio suave en zona 2 al final.
+const namesText = (ids, verb) => !ids.length ? '' : ids.length <= 2 ? `${verb} ${ids.map(id => EXERCISES[id].name.toLowerCase()).join(' y ')}` : `${verb} ${ids.length} ejercicios`;
+const EXTRA_POOL = ['face_pull', 'curl_maquina', 'triceps_polea', 'elev_laterales', 'pec_deck', 'pallof'];
+export function expandToTime(items, limitSec, { phase, settings, mode = 'normal', adj = null }, pace = 1, maxAdds = Infinity) {
+  const need = () => remainingEstimate(items) * pace;
+  const log = { sets: 0, items: [], back: [] };
+  let adds = 0;
+  const fits = extra => adds < maxAdds && need() + extra * pace <= limitSec;
+  // 0) recupera lo que se quitó antes por ir justo
+  for (const it of items) {
+    if (!(it.trimmed && it.status === 'skipped' && !it.sets.some(s => s.done))) continue;
+    if (!fits(estimateItem(it))) continue;
+    it.status = 'todo'; it.trimmed = false; adds++; log.back.push(it.id);
+  }
+  const strengthOk = mode === 'normal' && !adj?.hold && !phase.hold;
+  const insertAt = () => { const k = items.findIndex(it => it.g === 'calma' && it.status === 'todo'); return k < 0 ? items.length : k; };
+  if (strengthOk) {
+    // 1) series extra en principales
+    for (const it of items.filter(it => it.status === 'todo' && it.g === 'fuerza' && isMainSlot(it))) {
+      const ex = EXERCISES[it.id];
+      if (workAll(it).length >= (phase.key === 'adapt' ? 3 : 4)) continue;
+      const proto = workAll(it).at(-1) || it.sets.at(-1);
+      const cost = (Array.isArray(ex.reps) ? ex.reps[1] : ex.reps || 10) * 3.5 * (ex.perSide ? 2 : 1) + (it.rest || 60);
+      if (!proto || !fits(cost + 60)) continue;
+      it.sets.push({ ...proto, done: false, skipped: false, trimmed: false, added: true, warmup: false });
+      log.sets++; adds++;
+    }
+    // 2) accesorios
+    const used = new Set(items.map(it => it.id));
+    let added = 0;
+    for (const slot of EXTRA_POOL) {
+      if (added >= 3) break;
+      const ex0 = EXERCISES[slot];
+      if (items.some(it => (it.slot || it.id) === slot)) continue;
+      const id = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : slot;
+      if (used.has(id) || settings[id]?.disabled) continue;
+      const it = buildItem(id, { slot, g: ex0.group === 'core' ? 'core' : 'fuerza', phase, settings, mode, adj, nSets: Math.min(phase.sets, 3) });
+      if (!fits(estimateItem(it) + 90)) continue;
+      it.extra = true; items.splice(insertAt(), 0, it); used.add(id); added++; adds++; log.items.push(id);
+    }
+  }
+  // 3) cardio suave al final (también en días suaves)
+  if (!items.some(it => it.id === 'cardio_z2' && it.status === 'todo')) {
+    const spare = (limitSec - need()) / pace / 60;
+    if (spare >= 8 && adds < maxAdds) {
+      const mins = Math.min(30, Math.floor(spare - 1.5));
+      const it = buildItem('cardio_z2', { g: 'cardio', phase, settings, mode });
+      it.sets[0].mins = mins; it.extra = true;
+      items.splice(insertAt(), 0, it); log.items.push('cardio_z2');
+    }
+  }
+  const changed = log.sets > 0 || log.items.length > 0 || log.back.length > 0;
+  return { changed, dir: 'up', text: [namesText(log.back, 'recupero'), log.sets ? `+${log.sets} ${log.sets > 1 ? 'series' : 'serie'} en los principales` : '', namesText(log.items, 'añado')].filter(Boolean).join(' y ') };
 }
 
 // ───── progresión ─────
@@ -257,7 +372,7 @@ export function fmtClock(sec) { sec = Math.max(0, Math.round(sec)); const m = Ma
 export function targetText(id, set) {
   const ex = EXERCISES[id];
   const side = ex.perSide ? ' por lado' : '';
-  if (ex.kind === 'time') return `${ex.minutes} min`;
+  if (ex.kind === 'time') return `${set?.mins || ex.minutes} min`;
   if (ex.kind === 'hold') return `${set.hold} s${side}`;
   if (ex.kind === 'holdreps') return `${set.reps} × ${set.hold} s${side}`;
   if (ex.kind === 'carry') return `${set.hold} s por mano`;
@@ -270,7 +385,7 @@ export function guidedSteps(id, set) {
   const ex = EXERCISES[id];
   const sides = ex.perSide || ex.kind === 'carry' ? (ex.sideLabels || ['Lado derecho', 'Lado izquierdo']) : [null];
   const steps = [];
-  if (ex.kind === 'time') return [{ label: ex.name, sub: 'Ritmo suave', secs: (ex.minutes || 2) * 60, work: true }];
+  if (ex.kind === 'time') return [{ label: ex.name, sub: ex.group === 'cardio' ? 'Zona 2: puedes hablar' : 'Ritmo suave', secs: (set?.mins || ex.minutes || 2) * 60, work: true }];
   sides.forEach((side, si) => {
     if (si > 0) steps.push({ label: 'Cambia de lado', sub: side, secs: 5, work: false, say: 'Cambia de lado' });
     if (ex.kind === 'hold' || ex.kind === 'carry') steps.push({ label: side || 'Aguanta', sub: ex.kind === 'carry' ? 'Camina erguido' : 'Aguanta', secs: set.hold, work: true, say: si === 0 ? 'Empezamos' : null });

@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin cobertura en el gimnasio.
-const VERSION = 'gym-v1.3.0';
+const VERSION = 'gym-v1.4.0';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/art.js', 'js/exercises.js', 'js/program.js', 'js/coach.js', 'js/monitor.js', 'js/store.js', 'js/config.js',

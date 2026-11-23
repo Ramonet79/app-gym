@@ -599,6 +599,16 @@ export const EXERCISES = {
     },
   },
 
+  // ───────── CARDIO EXTRA (cuando sobra tiempo) ─────────
+  cardio_z2: {
+    name: 'Cardio suave en zona 2', group: 'cardio', kind: 'time', minutes: 10,
+    machine: 'Bici estática con respaldo, elíptica o cinta inclinada caminando', muscles: ['Cardio', 'Recuperación'],
+    setup: ['Mejor bici con respaldo (reclinada) o elíptica: columna vertical o apoyada', 'Resistencia moderada'],
+    cues: ['Debes poder hablar en frases completas', 'Cadencia cómoda y constante', 'Respira por la nariz si puedes'],
+    avoid: ['Ir encorvado sobre el manillar', 'Convertirlo en un sprint: aquí suma el volumen suave'],
+    why: 'Con tiempo extra, el cardio suave mejora la salud del corazón y la recuperación sin restar a la fuerza. Y te mueve en vez de estar sentado.',
+  },
+
   // ───────── SPINNING ─────────
   spinning: {
     name: 'Spinning', group: 'cardio', kind: 'time', minutes: 45,
@@ -623,6 +633,7 @@ export const EXERCISES = {
 
 // Dibujos derivados (misma máquina, otro agarre)
 const X = EXERCISES;
+X.cardio_z2.art = X.spinning.art;
 X.jalon_neutro.art = { ...X.jalon.art, dyn: p => cable(82, 8, p.w) + grip(p.w) };
 X.press_inclinado_mancuernas.art = { ...X.press_inclinado.art, back: L(62, 114, 42, 58, 9) + SEAT, dyn: p => db(p.w) };
 X.remo_polea_unilateral.art = { ...X.remo_polea.art, A: { ...X.remo_polea.art.A, e2: [70, 100], w2: [86, 104] } };
