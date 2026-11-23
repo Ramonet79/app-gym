@@ -497,3 +497,20 @@ p { margin: 6px 0; }
 .timebox p { margin: 8px 0 0; }
 .mode-banner.info { background: rgba(61, 214, 198, .1); color: var(--c-core); }
 .tb-spare { color: var(--c-core); }
+
+/* ── zonas del gimnasio ── */
+.z-cardio { --z: var(--c-cardio); } .z-suelo { --z: var(--c-core); } .z-maquinas { --z: #7aa2ff; } .z-libre { --z: var(--c-warm); }
+.zr-lbl { display: flex; align-items: center; gap: 5px; margin: 12px 0 6px; }
+.zr-lbl .ic { width: 14px; height: 14px; }
+.zroute { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
+.zroute .zr { font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 99px; color: var(--z); background: color-mix(in srgb, var(--z) 14%, transparent); border: 1px solid color-mix(in srgb, var(--z) 40%, transparent); }
+.zroute i { font-style: normal; color: var(--muted); font-size: 12px; }
+.preview li.zone-h, .map li.zone-h { border-left: 0; padding: 10px 0 2px; margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--z); display: block; }
+.zone-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 99px; color: var(--z); background: color-mix(in srgb, var(--z) 14%, transparent); }
+.zone-chip .ic { width: 13px; height: 13px; }
+.mode-banner.zbanner { color: var(--z); background: color-mix(in srgb, var(--z) 13%, transparent); border: 1px solid color-mix(in srgb, var(--z) 40%, transparent); font-weight: 650; }
+.next-ex { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 0; font-size: 14.5px; color: var(--muted); }
+.next-ex .ic { width: 15px; height: 15px; }
+.next-ex b { color: var(--text); }
+.next-ex.moves { color: var(--c-warm); }
+.mode-banner > span { flex: 1; text-align: left; } .mode-banner .ic { flex: none; }

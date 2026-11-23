@@ -720,3 +720,23 @@ export const GROUPS = {
   calma: { name: 'Vuelta a la calma', short: 'Calma', color: 'var(--c-calma)' },
   cardio: { name: 'Cardio', short: 'Cardio', color: 'var(--c-cardio)' },
 };
+
+// ───── Zonas del gimnasio: la sesión se ordena por zonas para no ir y volver ─────
+export const ZONES = {
+  cardio: { name: 'Zona de cardio', short: 'Cardio' },
+  suelo: { name: 'Zona de peso corporal (esterillas)', short: 'Peso corporal' },
+  maquinas: { name: 'Zona de máquinas y poleas', short: 'Máquinas' },
+  libre: { name: 'Zona de peso libre (mancuernas y bancos)', short: 'Peso libre' },
+};
+const ZONE_OF = {
+  cardio: ['eliptica', 'caminar', 'spinning', 'cardio_z2'],
+  suelo: ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal'],
+  maquinas: ['pallof', 'press_pecho', 'remo_pecho', 'press_hombro', 'face_pull', 'jalon', 'press_inclinado', 'remo_polea', 'pec_deck', 'curl_maquina', 'triceps_polea',
+    'pajaros_maquina', 'jalon_neutro', 'dominada_asistida', 'remo_polea_unilateral', 'cruce_poleas', 'curl_polea', 'triceps_maquina', 'triceps_unilateral', 'laterales_maquina', 'laterales_polea'],
+  libre: ['carry', 'elev_laterales', 'press_mancuernas', 'flexiones_inclinadas', 'remo_mancuerna', 'remo_invertido', 'press_hombro_mancuernas', 'y_inclinado', 'press_inclinado_mancuernas', 'curl_mancuernas_inclinado'],
+};
+for (const [z, ids] of Object.entries(ZONE_OF)) for (const id of ids) if (EXERCISES[id]) EXERCISES[id].zone = z;
+// Si en tu gimnasio un ejercicio está en otra zona, se corrige desde la ficha del ejercicio (se guarda en tus preferencias).
+let ZONE_OVERRIDE = {};
+export const setZoneOverrides = m => { ZONE_OVERRIDE = m || {}; };
+export const zoneOf = id => ZONE_OVERRIDE[id] || EXERCISES[id]?.zone || 'suelo';

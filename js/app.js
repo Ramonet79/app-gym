@@ -1,4 +1,4 @@
-import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor } from './exercises.js';
+import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor, ZONES, zoneOf, setZoneOverrides } from './exercises.js';
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
 import * as C from './coach.js';
@@ -9,6 +9,7 @@ const app = document.getElementById('app');
 const ui = { tab: 'hoy', sheet: null, ex: null, inSession: !!S.active, summary: null, chartEx: 'press_pecho', toast: null, busy: false };
 S.dayType = S.dayType || {};
 S.checkins = S.checkins || {};
+setZoneOverrides(S.prefs.zones);
 
 // ───────── utilidades ─────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -112,6 +113,7 @@ const plannedLabel = nx => nx.type === 'fuerza' ? P.TEMPLATES[nx.tpl].name : REC
 // ───────── render ─────────
 function render() {
   stopAnim();
+  setZoneOverrides(S.prefs.zones); // por si llegan cambios desde la nube
   let html;
   if (cloud.recovery) html = viewRecovery();
   else if (!S.profile) html = viewOnboarding();
@@ -303,6 +305,14 @@ function sessionPlan(T, kind) {
   return { tpl, plan, est: P.estimateTotal(plan.items) };
 }
 
+// Ruta de zonas de una lista de ejercicios: [{z, items}]
+function zoneRuns(items) {
+  const runs = [];
+  for (const it of items) { const z = zoneOf(it.id); if (!runs.length || runs.at(-1).z !== z) runs.push({ z, items: [] }); runs.at(-1).items.push(it); }
+  return runs;
+}
+const zoneRoute = items => `<div class="zroute">${zoneRuns(items).map(r => `<span class="zr z-${r.z}">${ZONES[r.z].short}</span>`).join('<i>→</i>')}</div>`;
+
 function timeBox(est = 0, T = null) {
   const b = budget();
   const spare = Math.round(b.min - est / 60);
@@ -338,8 +348,10 @@ function strengthCard(T, kind) {
     <div class="tl-legend">${blocks.map(b => `<span style="--c:${GROUPS[b.g].color}"><i></i>${GROUPS[b.g].short} ${Math.round(b.sec / 60)}'</span>`).join('')}</div>
     ${timeBox(est, T)}
     <button class="btn primary xl" data-a="sheet" data-s="pain">${icon('play')} Empezar · ${Math.round(est / 60)}' · fin ${hhmm(new Date(Date.now() + est * 1000))}</button>
+    <p class="small muted zr-lbl">${icon('pin')} Recorrido por zonas del gimnasio</p>
+    ${zoneRoute(plan.items)}
     <details class="preview"><summary>Ver los ${plan.items.length} ejercicios</summary>
-      <ol>${plan.items.map(i => `<li style="--c:${GROUPS[i.g].color}"><b>${EXERCISES[i.id].name}</b><span>${setsSummary(i)}</span></li>`).join('')}</ol>
+      <ol>${zoneRuns(plan.items).map(r => `<li class="zone-h z-${r.z}">${ZONES[r.z].name}</li>` + r.items.map(i => `<li style="--c:${GROUPS[i.g].color}"><b>${EXERCISES[i.id].name}</b><span>${setsSummary(i)}</span></li>`).join('')).join('')}</ol>
     </details>
     <button class="btn ghost" data-a="choose" data-v="">Cambiar: elegir otra cosa</button>
   </section>`;
@@ -414,8 +426,10 @@ function viewRunner() {
     <div class="r-body">
       <div class="r-head">
         <span class="block-chip">${g.name} · ${blockItems.indexOf(it) + 1}/${blockItems.length}</span>
+        <span class="zone-chip z-${zoneOf(it.id)}">${icon('pin')} ${ZONES[zoneOf(it.id)].short}</span>
         ${ex.levels ? `<span class="lvl">Nivel ${st.level + 1}: ${ex.levels[st.level].name}</span>` : ''}
       </div>
+      ${zoneChange(A, it)}
       <div class="art-wrap" data-anim="${it.id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
       <h1 class="ex-name">${ex.name}</h1>
       <p class="where">${icon('pin')} ${ex.machine}</p>
@@ -885,6 +899,17 @@ function viewLibrary() {
     }).join('')}</div>`).join('')}`;
 }
 
+// Aviso al llegar a un ejercicio de otra zona (antes de empezarlo)
+function zoneChange(A, it) {
+  if (it.sets.some(s => s.done)) return '';
+  const prev = A.items.filter((x, k) => k !== A.idx && x.status === 'done').at(-1) || A.items[A.idx - 1];
+  if (!prev) return '';
+  const z = zoneOf(it.id);
+  if (zoneOf(prev.id) === z) return '';
+  const here = A.items.filter(x => x.status === 'todo' && zoneOf(x.id) === z).length;
+  return `<div class="mode-banner zbanner z-${z}">${icon('pin')}<span>Cambia a la ${ZONES[z].name.toLowerCase()} · ${here} ${here === 1 ? 'ejercicio' : 'ejercicios'} aquí</span></div>`;
+}
+
 const slowBadge = ex => ex.art?.B && !ex.art.at && !(ex.art.dur < 2000) ? `<span class="slow-badge ${ui.slow ? 'on' : ''}">${ui.slow ? 'Cámara lenta' : 'Toca: cámara lenta'}</span>` : '';
 
 function swapBtn(id, action, note = '', extra = '') {
@@ -918,6 +943,11 @@ function viewExercise(id) {
       ${ex.levels ? `<p class="small muted">Nivel ${st.level + 1} de ${ex.levels.length}: ${ex.levels[st.level].name}</p>` : ''}
       <button class="mynote ${st.note ? '' : 'empty'}" data-a="sheet" data-s="note" data-id="${id}">${icon('gear')} ${st.note ? 'Mi ajuste: ' + esc(st.note) : 'Apunta tu ajuste de máquina'}</button>
       ${!ex.bodyweight && (ex.kind === 'reps' || ex.kind === 'carry') ? `<button class="btn ghost sm" data-a="sheet" data-s="kg" data-id="${id}">Cambiar peso de trabajo</button>` : ''}
+    </section>
+    <section class="card">
+      <p class="eyebrow">${icon('pin')} Zona en tu gimnasio</p>
+      <div class="seg-pick wrap zpick">${Object.entries(ZONES).filter(([z]) => z !== 'cardio' || ex.group === 'cardio').map(([z, Z]) => `<button class="${zoneOf(id) === z ? 'on' : ''}" data-a="setZone" data-id="${id}" data-v="${z}">${Z.short}</button>`).join('')}</div>
+      <p class="small muted">La sesión se ordena por zonas para que no vayas y vuelvas. Si en tu gimnasio este ejercicio está en otra zona, márcala aquí.</p>
     </section>
     <section class="card tech-body">
       <h4>Colócate</h4><ul>${ex.setup.map(x => `<li>${x}</li>`).join('')}</ul>
@@ -977,7 +1007,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.4</p>`;
+  <p class="muted small center ver">App Gym · v1.5</p>`;
 }
 
 function weekPrefsCard() {
@@ -1065,7 +1095,8 @@ function viewSheet() {
         <button data-a="feel" data-v="facil" class="f-facil"><b>😌</b>Fácil<small>me sobraban reps</small></button>
         <button data-a="feel" data-v="bien" class="f-bien"><b>💪</b>Justo<small>exigente pero bien</small></button>
         <button data-a="feel" data-v="duro" class="f-duro"><b>😣</b>Duro<small>al límite / técnica peor</small></button>
-      </div>`;
+      </div>
+      ${(() => { const A = S.active, nx = A.items.find((x, k) => k > A.idx && x.status === 'todo') || A.items.find((x, k) => k !== A.idx && x.status === 'todo'); if (!nx) return ''; const z = zoneOf(nx.id), moves = z !== zoneOf(it.id); return `<p class="next-ex ${moves ? 'moves' : ''}">${icon('pin')} Siguiente: <b>${EXERCISES[nx.id].name}</b> · ${moves ? 'cambia a ' : ''}${ZONES[z].short.toLowerCase()}</p>`; })()}`;
       break;
     }
     case 'finish':
@@ -1084,7 +1115,7 @@ function viewSheet() {
       <button class="btn danger" data-a="discard">Descartar sesión</button>`;
       break;
     case 'map':
-      body = `<h2>Sesión de hoy</h2><p class="muted small">Toca un ejercicio para ir a él.</p><ol class="map">${S.active.items.map((it, k) => `<li><button class="s-${it.status} ${k === S.active.idx ? 'cur' : ''}" data-a="jump" data-i="${k}" style="--c:${GROUPS[it.g].color}">
+      body = `<h2>Sesión de hoy</h2><p class="muted small">Toca un ejercicio para ir a él.</p><ol class="map">${S.active.items.map((it, k) => `${k === 0 || zoneOf(S.active.items[k - 1].id) !== zoneOf(it.id) ? `<li class="zone-h z-${zoneOf(it.id)}">${ZONES[zoneOf(it.id)].name}</li>` : ''}<li><button class="s-${it.status} ${k === S.active.idx ? 'cur' : ''}" data-a="jump" data-i="${k}" style="--c:${GROUPS[it.g].color}">
         <i></i><b>${EXERCISES[it.id].name}</b><small>${it.status === 'done' ? 'Hecho' : it.status === 'skipped' ? (it.trimmed ? 'Quitado por tiempo' : 'Saltado') : (it.extra ? 'Extra · ' : '') + setsSummary(it)}</small></button></li>`).join('')}</ol>`;
       break;
     case 'note': {
@@ -1118,12 +1149,13 @@ function viewSheet() {
       const A = S.active, it = A.items[A.idx];
       const slot = it.slot || SLOT_OF[it.id] || it.id;
       const inSession = new Set(A.items.map(i => i.id));
-      const opts = ALTERNATIVES[slot] ? optionsFor(slot).filter(id => !inSession.has(id)) : [];
+      const zNow = zoneOf(it.id);
+      const opts = ALTERNATIVES[slot] ? optionsFor(slot).filter(id => !inSession.has(id)).sort((a, b) => (zoneOf(a) !== zNow) - (zoneOf(b) !== zNow)) : [];
       const later = A.items.some((x, k) => k > A.idx && x.status === 'todo');
       body = `<h2>${EXERCISES[it.id].name}</h2>
       ${later ? `<button class="btn xl" data-a="busy">${icon('clock')} Está ocupada: lo hago después</button>` : '<p class="muted small">Es el último ejercicio: si la máquina está ocupada, cámbialo por otro.</p>'}
       ${opts.length ? `<p class="eyebrow sw-title">O cámbialo por</p>
-      <div class="swaps">${opts.map(id => swapBtn(id, 'swapTo', id === slot ? 'El de base' : EXERCISES[id].swapOnly ? 'Con tu peso, sin máquina' : '')).join('')}</div>
+      <div class="swaps">${opts.map(id => swapBtn(id, 'swapTo', [zoneOf(id) === zNow ? 'Misma zona' : 'Zona de ' + ZONES[zoneOf(id)].short.toLowerCase(), id === slot ? 'el de base' : EXERCISES[id].swapOnly ? 'con tu peso' : ''].filter(Boolean).join(' · '))).join('')}</div>
       <label class="toggle"><input type="checkbox" id="pinSwap"><span>Usar siempre el que elija (no rotar)</span></label>`
       : '<p class="muted small">Este ejercicio no tiene alternativas: forma parte de tu base de core y progresa por niveles.</p>'}`;
       break;
@@ -1270,6 +1302,12 @@ const actions = {
   },
   pin: d => { updateSetting(d.slot, { swapTo: d.id }); save(); toast('Fijado: la app usará siempre este'); render(); },
   unpin: d => { updateSetting(d.id, { swapTo: null }); save(); toast('Vuelve a la rotación automática'); render(); },
+  setZone: d => {
+    const def = EXERCISES[d.id].zone;
+    S.prefs.zones = { ...(S.prefs.zones || {}) };
+    if (d.v === def) delete S.prefs.zones[d.id]; else S.prefs.zones[d.id] = d.v;
+    setZoneOverrides(S.prefs.zones); save(); enqueue('profile', 'me'); toast('Zona guardada'); render();
+  },
   slowmo: () => { ui.slow = !ui.slow; render(); },
   ciOpen: d => { ui.sheet = { type: 'checkin', kind: d.v, a: {} }; render(); },
   ciLater: () => { S.prefs.ciLater = P.todayISO(); save(); render(); },

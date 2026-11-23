@@ -1,5 +1,5 @@
 // Programa: plantillas, calendario semanal, fases, construcción de sesión y progresión.
-import { EXERCISES, ALTERNATIVES, MAIN_LIFTS, optionsFor } from './exercises.js';
+import { EXERCISES, ALTERNATIVES, MAIN_LIFTS, optionsFor, zoneOf } from './exercises.js';
 
 export const MAX_MIN = 45;
 
@@ -104,10 +104,17 @@ export const hasAlternatives = slot => !!ALTERNATIVES[slot];
 export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = null, budgetMin = MAX_MIN }) {
   const tpl = TEMPLATES[mode === 'proteccion' ? 'M' : tplKey];
   const items = [];
-  const used = new Set();
+  const used = new Set(), mainZones = new Set();
   for (const b of tpl.blocks) {
     for (const slot of b.items) {
-      const id = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : (settings[slot]?.swapTo && EXERCISES[settings[slot].swapTo] ? settings[slot].swapTo : slot);
+      let id = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : (settings[slot]?.swapTo && EXERCISES[settings[slot].swapTo] ? settings[slot].swapTo : slot);
+      // complementarios: si la variante del bloque está en otra zona, se busca una equivalente en la zona de los principales
+      if (ALTERNATIVES[slot] && !MAIN_LIFTS.has(slot) && !settings[slot]?.swapTo && mainZones.size && !mainZones.has(zoneOf(id))) {
+        const opts = optionsFor(slot), k = opts.indexOf(id);
+        const alt = [...opts.slice(k), ...opts.slice(0, k)].find(o => !EXERCISES[o].swapOnly && !used.has(o) && !settings[o]?.disabled && mainZones.has(zoneOf(o)));
+        if (alt) id = alt;
+      }
+      if (MAIN_LIFTS.has(slot)) mainZones.add(zoneOf(id));
       const st = getSetting(settings, id);
       if (st.disabled) continue;
       used.add(id);
@@ -119,8 +126,44 @@ export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = n
   const lim = (budgetMin - 1) * 60, ctx = { phase, settings, mode, adj };
   if (budgetMin > MAX_MIN) adaptToTime(items, lim, ctx); // con más tiempo se amplía; con 45' o menos solo se recorta
   else if (remainingEstimate(items) > lim) fitToTime(items, lim);
-  const out = items.filter(it => !it.trimmed);
+  const out = orderByZone(items.filter(it => !it.trimmed));
   return { template: mode === 'proteccion' ? 'M' : tplKey, items: out };
+}
+
+// ───── orden por zonas ─────
+// calentamiento → core McGill (esterilla) → fuerza agrupada por zona → cardio extra y calma.
+// El core que no es de esterilla (Pallof en polea, paseo con mancuerna) se hace en su zona, al final de ese bloque.
+// Entre zonas se elige el orden que deja los ejercicios principales antes que los complementarios.
+export function orderByZone(items) {
+  const isMain = it => MAIN_LIFTS.has(it.slot || it.id);
+  const warm = items.filter(it => it.g === 'warm');
+  const coreFloor = items.filter(it => it.g === 'core' && zoneOf(it.id) === 'suelo');
+  const strength = items.filter(it => it.g === 'fuerza' || (it.g === 'core' && zoneOf(it.id) !== 'suelo'));
+  const tail = items.filter(it => !warm.includes(it) && !coreFloor.includes(it) && !strength.includes(it));
+  const zones = [...new Set(strength.map(it => zoneOf(it.id)))];
+  const groupOf = z => {
+    const g = strength.filter(it => zoneOf(it.id) === z);
+    return [...g.filter(it => it.g === 'fuerza' && isMain(it)), ...g.filter(it => it.g === 'fuerza' && !isMain(it)), ...g.filter(it => it.g === 'core')];
+  };
+  const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map(r => [x, ...r]));
+  let best = zones, bestPen = Infinity;
+  for (const pz of perms(zones)) {
+    const seq = pz.flatMap(groupOf);
+    let pen = 0, seenAcc = false;
+    for (const it of seq) { if (!isMain(it)) seenAcc = true; else if (seenAcc) pen++; } // el core de fuerza (Pallof, paseo) cuenta como complementario
+    if (pen < bestPen) { bestPen = pen; best = pz; }
+  }
+  return [...warm, ...coreFloor, ...best.flatMap(groupOf), ...tail];
+}
+
+// Dónde insertar un ejercicio extra: al final de su zona dentro de la fuerza; si no hay, antes del cardio/calma final
+export function insertIndexFor(items, id) {
+  const z = zoneOf(id);
+  let k = -1;
+  items.forEach((it, i) => { if (it.status === 'todo' && (it.g === 'fuerza' || it.g === 'core') && zoneOf(it.id) === z) k = i; });
+  if (k >= 0) return k + 1;
+  const c = items.findIndex(it => (it.g === 'calma' || it.g === 'cardio') && it.status === 'todo');
+  return c < 0 ? items.length : c;
 }
 
 // Un ejercicio con sus series. nSets fuerza el número de series de trabajo (al cambiar de ejercicio a mitad de sesión).
@@ -268,11 +311,14 @@ export function expandToTime(items, limitSec, { phase, settings, mode = 'normal'
       if (added >= 3) break;
       const ex0 = EXERCISES[slot];
       if (items.some(it => (it.slot || it.id) === slot)) continue;
-      const id = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : slot;
+      const zonesHere = new Set(items.filter(x => x.status === 'todo' && (x.g === 'fuerza' || x.g === 'core')).map(x => zoneOf(x.id)));
+      const rot = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : slot;
+      const sameZone = optionsFor(slot).filter(o => !EXERCISES[o].swapOnly && !used.has(o) && !settings[o]?.disabled && zonesHere.has(zoneOf(o)));
+      const id = settings[slot]?.swapTo ? rot : zonesHere.has(zoneOf(rot)) ? rot : sameZone[0] || rot; // mejor en una zona donde ya estás
       if (used.has(id) || settings[id]?.disabled) continue;
       const it = buildItem(id, { slot, g: ex0.group === 'core' ? 'core' : 'fuerza', phase, settings, mode, adj, nSets: Math.min(phase.sets, 3) });
       if (!fits(estimateItem(it) + 90)) continue;
-      it.extra = true; items.splice(insertAt(), 0, it); used.add(id); added++; adds++; log.items.push(id);
+      it.extra = true; items.splice(insertIndexFor(items, id), 0, it); used.add(id); added++; adds++; log.items.push(id);
     }
   }
   // 3) cardio suave al final (también en días suaves)
