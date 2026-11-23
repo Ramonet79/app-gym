@@ -1,6 +1,7 @@
 import { EXERCISES, GROUPS } from './exercises.js';
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
+import * as C from './coach.js';
 import { S, save, uid, enqueue, initCloud, cloud, onCloud, user, sync, signIn, signUp, signOut, resetPassword, updatePassword, hasCloud } from './store.js';
 
 const app = document.getElementById('app');
@@ -70,33 +71,24 @@ function releaseWake() { try { wakeLock?.release(); } catch (e) { /* nada */ } w
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.active && ui.inSession) acquireWake(); });
 
 // ───────── lógica de día ─────────
-function dayTypeFor(dateObj) {
-  const d = P.iso(dateObj);
-  return S.dayType[d] || P.WEEK_PLAN[dateObj.getDay()];
-}
+// Sin calendario fijo: cada mañana eliges y el entrenador (coach.js) recomienda y ajusta según el histórico.
 function todayInfo() {
   const now = new Date(), d = P.todayISO();
-  const phase = P.phaseFor(d, S.profile.startDate);
-  const type = dayTypeFor(now);
-  const done = sessionsOn(d);
-  const tpl = P.nextStrengthTemplate(S.sessions);
-  return { d, now, phase, type, done, tpl };
+  const plan = C.planToday({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: d });
+  return { d, now, plan, phase: plan.phase, tpl: plan.tpl, choice: S.dayType[d] || null, done: sessionsOn(d) };
 }
-function weekCounts() {
-  const dates = P.weekDates().map(P.iso);
-  const ses = Object.values(S.sessions).filter(s => s.status === 'done' && dates.includes(s.date));
-  return { fuerza: ses.filter(s => s.type === 'fuerza').length, spinning: ses.filter(s => s.type === 'spinning').length };
-}
+const REC_LABEL = { fuerza: 'Fuerza', spinning: 'Spinning', movilidad: 'Movilidad y core', descanso: 'Descanso' };
 function nextPlanned() {
-  const base = new Date();
-  let tpl = P.nextStrengthTemplate(S.sessions);
+  const gd = C.gymDaysOf(S.prefs);
   for (let i = 1; i <= 7; i++) {
-    const d = new Date(base); d.setDate(base.getDate() + i);
-    const t = dayTypeFor(d);
-    if (t === 'fuerza' || t === 'spinning') return { date: d, type: t, tpl };
+    const d = new Date(); d.setDate(d.getDate() + i);
+    if (!gd.includes(d.getDay())) continue;
+    const p = C.planToday({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: P.iso(d) });
+    return { date: d, type: p.rec, tpl: p.tpl };
   }
   return null;
 }
+const plannedLabel = nx => nx.type === 'fuerza' ? P.TEMPLATES[nx.tpl].name : REC_LABEL[nx.type];
 
 // ───────── render ─────────
 function render() {
@@ -133,29 +125,30 @@ function viewToday() {
   const T = todayInfo();
   const hour = T.now.getHours();
   const hello = hour < 13 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches';
-  const wk = P.weekDates();
-  const strip = wk.map(d => {
-    const iso = P.iso(d), t = dayTypeFor(d), done = sessionsOn(iso);
-    const isToday = iso === T.d;
-    const ok = done.some(s => s.type === t || (t === 'fuerza' && s.type === 'movilidad'));
-    const lbl = t === 'fuerza' ? 'F' : t === 'spinning' ? 'S' : '·';
-    return `<div class="day ${isToday ? 'today' : ''} ${ok ? 'ok' : ''} t-${t}"><span>${P.DAY_SHORT[d.getDay()]}</span><b>${ok ? icon('check') : lbl}</b></div>`;
+  const proj = C.projectWeek({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: T.d, todayChoice: T.choice });
+  const strip = P.weekDates().map(d => {
+    const iso = P.iso(d), done = sessionsOn(iso).filter(s => s.type !== 'core');
+    const isToday = iso === T.d, past = iso < T.d;
+    let t, ok = false;
+    if (done.length) { ok = true; t = done.some(s => s.type === 'fuerza') ? 'fuerza' : done.some(s => s.type === 'spinning') ? 'spinning' : 'movilidad'; }
+    else t = past ? 'none' : proj[iso] || 'descanso';
+    const lbl = { fuerza: 'F', spinning: 'S', movilidad: 'M' }[t] || '·';
+    return `<div class="day ${isToday ? 'today' : ''} ${ok ? 'ok' : ''} ${!ok && !past ? 'plan' : ''} t-${t}"><span>${P.DAY_SHORT[d.getDay()]}</span><b>${ok ? icon('check') : lbl}</b></div>`;
   }).join('');
-  const wc = weekCounts();
-  const nx = nextPlanned();
+  const W = T.plan.week, TG = T.plan.targets;
   return `
   <header class="top">
     <div><p class="muted">${cap(dfLong.format(T.now))}</p><h1>${hello}, ${esc(S.profile.name || '')}</h1></div>
     ${syncPill()}
   </header>
   <section class="phase-card">
-    <div class="phase-row"><span class="chip ph-${T.phase.key}">Semana ${T.phase.week} · ${T.phase.name}</span><span class="muted small">Fuerza ${wc.fuerza}/3 · Spinning ${wc.spinning}/2</span></div>
+    <div class="phase-row"><span class="chip ph-${T.phase.key}">Semana ${T.phase.week} · ${T.phase.name}</span><span class="muted small">Fuerza <b class="${W.fuerza >= TG.fuerza ? 'met' : ''}">${W.fuerza}/${TG.fuerza}</b> · Spinning <b class="${W.spinning >= TG.spinning ? 'met' : ''}">${W.spinning}/${TG.spinning}</b></span></div>
     <div class="strip">${strip}</div>
+    <p class="strip-legend">${icon('check')} hecho · letra tenue = previsión si sigues mis recomendaciones</p>
   </section>
   ${S.active ? resumeCard() : todayCard(T)}
   ${notesCards()}
   ${lastWins()}
-  ${nx ? `<section class="card subtle"><p class="muted small">Próximo entreno</p><p class="big-line">${cap(P.DAY_NAMES[nx.date.getDay()])} · ${nx.type === 'fuerza' ? P.TEMPLATES[nx.tpl].name : 'Spinning'}</p></section>` : ''}
   `;
 }
 
@@ -172,53 +165,98 @@ function resumeCard() {
 
 function todayCard(T) {
   const doneToday = T.done;
-  if (doneToday.length) {
+  if (doneToday.length && !ui.another) {
     const s = doneToday.at(-1);
+    const nx = nextPlanned();
     return `<section class="hero done">
       <p class="eyebrow">${icon('check')} Hecho hoy</p>
       <h2>${s.type === 'spinning' ? 'Spinning' : P.TEMPLATES[s.template]?.name || cap(s.type)}</h2>
       <p class="muted">${s.durationMin ? Math.round(s.durationMin) + ' min' : ''}${s.painAfter != null ? ` · Espalda al terminar: ${s.painAfter}/10` : ''}</p>
       ${s.type === 'spinning' && !doneToday.some(x => x.type === 'core') ? `<button class="btn core" data-a="startCore">${icon('spark')} Core exprés (6 min)</button>` : ''}
-      <button class="btn ghost" data-a="sheet" data-s="daytype">Hacer otra cosa</button>
+      ${nx ? `<p class="next-line">Próximo día de gimnasio (${P.DAY_NAMES[nx.date.getDay()].toLowerCase()}): <b>${plannedLabel(nx)}</b></p>` : ''}
+      <button class="btn ghost" data-a="another">Hacer otra cosa hoy</button>
     </section>`;
   }
-  if (T.type === 'fuerza') {
-    const plan = P.buildSession(T.tpl, { phase: T.phase, settings: S.settings, mode: 'normal' });
-    const est = P.estimateTotal(plan.items);
-    const blocks = P.TEMPLATES[T.tpl].blocks.map(b => {
-      const its = plan.items.filter(i => i.g === b.g);
-      const sec = its.reduce((a, i) => a + P.estimateItem(i), 0);
-      return { g: b.g, its, sec };
-    });
-    return `<section class="hero t-fuerza">
-      <p class="eyebrow">Hoy toca</p>
-      <h2>${P.TEMPLATES[T.tpl].name}</h2>
-      <p class="muted">${P.TEMPLATES[T.tpl].subtitle}</p>
-      <div class="timeline">${blocks.map(b => `<i style="flex:${b.sec};--c:${GROUPS[b.g].color}"></i>`).join('')}</div>
-      <div class="tl-legend">${blocks.map(b => `<span style="--c:${GROUPS[b.g].color}"><i></i>${GROUPS[b.g].short} ${Math.round(b.sec / 60)}'</span>`).join('')}</div>
-      <button class="btn primary xl" data-a="sheet" data-s="pain">${icon('play')} Empezar · ${Math.round(est / 60)} min</button>
-      <details class="preview"><summary>Ver los ${plan.items.length} ejercicios</summary>
-        <ol>${plan.items.map(i => `<li style="--c:${GROUPS[i.g].color}"><b>${EXERCISES[i.id].name}</b><span>${setsSummary(i)}</span></li>`).join('')}</ol>
-      </details>
-      <button class="btn ghost" data-a="sheet" data-s="daytype">Cambiar el plan de hoy</button>
-    </section>`;
-  }
-  if (T.type === 'spinning') {
-    return `<section class="hero t-spin">
-      <p class="eyebrow">Hoy toca</p>
-      <h2>Spinning · 45 min</h2>
-      <div class="art-wrap small" data-anim="spinning">${artSVG(EXERCISES.spinning.art)}</div>
-      <ul class="tips">${EXERCISES.spinning.setup.concat(EXERCISES.spinning.cues.slice(1, 2)).map(t => `<li>${t}</li>`).join('')}</ul>
-      <button class="btn primary xl" data-a="sheet" data-s="spin">${icon('check')} He hecho spinning</button>
-      <p class="muted small center">Después, si te da tiempo: core exprés de 6 minutos.</p>
-      <button class="btn ghost" data-a="sheet" data-s="daytype">Cambiar el plan de hoy</button>
-    </section>`;
-  }
+  const c = T.choice;
+  if (!c) return choiceCard(T);
+  if (c === 'fuerza' || c === 'movilidad') return strengthCard(T, c);
+  if (c === 'spinning') return spinCard(T);
   return `<section class="hero t-rest">
     <p class="eyebrow">${icon('moon')} Descanso</p>
     <h2>Hoy toca recuperar</h2>
-    <ul class="tips"><li>Camina 20-30 minutos</li><li>No estés más de 45 min seguidos sentado: levántate y muévete</li><li>Si te apetece: bird-dog y curl-up en casa (5 min)</li></ul>
-    <button class="btn ghost" data-a="sheet" data-s="daytype">Hoy quiero entrenar</button>
+    <ul class="tips"><li>Camina 20-30 minutos: el disco se nutre con movimiento suave</li><li>No estés más de 45 min seguidos sentado: levántate y muévete</li><li>Si te apetece: bird-dog y curl-up en casa (5 min)</li></ul>
+    <button class="btn ghost" data-a="choose" data-v="">Cambiar: sí voy al gimnasio</button>
+  </section>`;
+}
+
+function choiceCard(T) {
+  const p = T.plan;
+  const sp = sessionPlan(T, 'fuerza');
+  const opts = [
+    { v: 'fuerza', ic: 'dumbbell', title: P.TEMPLATES[p.tpl].name, sub: P.TEMPLATES[p.tpl].subtitle, meta: `${Math.round(sp.est / 60)} min`, tag: p.adj.tag },
+    { v: 'spinning', ic: 'bike', title: 'Spinning', sub: p.spin.title, meta: '45 min', tag: null },
+  ];
+  const recTxt = { fuerza: 'fuerza', spinning: 'spinning', movilidad: 'movilidad y core', descanso: 'descansar' }[p.rec];
+  return `<section class="choose">
+    <p class="eyebrow">${icon('spark')} ¿Qué haces hoy?</p>
+    <h2>Te recomiendo <span class="hl">${recTxt}</span></h2>
+    <ul class="reasons">${p.why.map(w => `<li>${w}</li>`).join('')}</ul>
+    <div class="choices">${opts.map(o => `<button class="choice c-${o.v} ${p.rec === o.v ? 'rec' : ''}" data-a="choose" data-v="${o.v}">
+      ${p.rec === o.v ? '<span class="badge">Recomendado</span>' : ''}
+      ${icon(o.ic)}<b>${o.title}</b><small>${o.sub}</small><span class="meta">${o.meta}${o.tag ? ` · <em>${o.tag}</em>` : ''}</span>
+    </button>`).join('')}</div>
+    <div class="choice-alt">
+      <button class="btn sm ${p.rec === 'movilidad' ? 'rec' : ''}" data-a="choose" data-v="movilidad">${icon('spark')} Movilidad</button>
+      <button class="btn sm ${p.rec === 'descanso' ? 'rec' : ''}" data-a="choose" data-v="descanso">${icon('moon')} Descanso</button>
+    </div>
+  </section>`;
+}
+
+function sessionPlan(T, kind) {
+  const tpl = kind === 'movilidad' ? 'M' : T.tpl;
+  const plan = P.buildSession(tpl, { phase: T.phase, settings: S.settings, mode: 'normal', adj: kind === 'fuerza' ? T.plan.adj : null });
+  return { tpl, plan, est: P.estimateTotal(plan.items) };
+}
+
+function strengthCard(T, kind) {
+  const { tpl, plan, est } = sessionPlan(T, kind);
+  const t = P.TEMPLATES[tpl];
+  const blocks = t.blocks.map(b => {
+    const its = plan.items.filter(i => i.g === b.g);
+    return { g: b.g, sec: its.reduce((a, i) => a + P.estimateItem(i), 0) };
+  }).filter(b => b.sec > 0);
+  const notes = [];
+  if (kind === 'fuerza') {
+    if (T.plan.adj.note) notes.push(T.plan.adj.note);
+    if (T.phase.key !== 'build') notes.push(`<b>${T.phase.name}.</b> ${T.phase.info}`);
+  } else notes.push('Movilidad, core McGill y glúteo, sin carga para la columna. Para días con la espalda cargada o cuando no toca fuerza.');
+  return `<section class="hero t-fuerza ${kind === 'movilidad' ? 't-mob' : ''}">
+    <p class="eyebrow">Hoy · ${kind === 'movilidad' ? 'Movilidad' : 'Fuerza'}${kind === 'fuerza' && T.plan.adj.tag ? ` · <span class="tag">${T.plan.adj.tag}</span>` : ''}</p>
+    <h2>${t.name}</h2>
+    <p class="muted">${t.subtitle}</p>
+    ${notes.length ? `<div class="adj">${notes.map(n => `<p>${n}</p>`).join('')}</div>` : ''}
+    <div class="timeline">${blocks.map(b => `<i style="flex:${b.sec};--c:${GROUPS[b.g].color}"></i>`).join('')}</div>
+    <div class="tl-legend">${blocks.map(b => `<span style="--c:${GROUPS[b.g].color}"><i></i>${GROUPS[b.g].short} ${Math.round(b.sec / 60)}'</span>`).join('')}</div>
+    <button class="btn primary xl" data-a="sheet" data-s="pain">${icon('play')} Empezar · ${Math.round(est / 60)} min</button>
+    <details class="preview"><summary>Ver los ${plan.items.length} ejercicios</summary>
+      <ol>${plan.items.map(i => `<li style="--c:${GROUPS[i.g].color}"><b>${EXERCISES[i.id].name}</b><span>${setsSummary(i)}</span></li>`).join('')}</ol>
+    </details>
+    <button class="btn ghost" data-a="choose" data-v="">Cambiar: elegir otra cosa</button>
+  </section>`;
+}
+
+function spinCard(T) {
+  const sp = T.plan.spin;
+  return `<section class="hero t-spin">
+    <p class="eyebrow">Hoy · Spinning 45 min</p>
+    <h2>${sp.title}</h2>
+    <p class="muted">${sp.why}</p>
+    <div class="zone"><div><b>${sp.zone}</b><small>pulsaciones (FC máx ≈ ${sp.fcmax})</small></div><div><b>${sp.rpe}</b><small>esfuerzo percibido</small></div></div>
+    <div class="art-wrap small" data-anim="spinning">${artSVG(EXERCISES.spinning.art)}</div>
+    <ul class="tips">${sp.tips.concat(EXERCISES.spinning.setup.slice(0, 2)).map(t => `<li>${t}</li>`).join('')}</ul>
+    <button class="btn primary xl" data-a="spinSheet">${icon('check')} He hecho spinning</button>
+    <p class="muted small center">Después: core exprés de 6 minutos. El multífido mejora con estímulo casi diario.</p>
+    <button class="btn ghost" data-a="choose" data-v="">Cambiar: elegir otra cosa</button>
   </section>`;
 }
 
@@ -233,7 +271,7 @@ function setsSummary(it) {
 
 function notesCards() {
   const notes = S.notes.filter(n => n.active && !n.readAt);
-  const intro = !Object.keys(S.sessions).length ? [{ id: 'intro', kind: 'plan', title: 'Cómo funciona tu plan', body: 'Lunes, miércoles y viernes: fuerza (A, B y C, siempre en ese orden). Martes y jueves: spinning. Cada sesión de fuerza empieza con core para el multífido y la zona lumbar, y sigue con tren superior en máquinas con la espalda apoyada. Las 2 primeras semanas son de adaptación: pesos cómodos y técnica. Antes de cada sesión te pregunto cómo está tu espalda y adapto la sesión.' }] : [];
+  const intro = !Object.keys(S.sessions).length ? [{ id: 'intro', kind: 'plan', title: 'Cómo funciona tu plan', body: 'Cada mañana eliges fuerza o spinning y te digo qué conviene más según lo que llevas de semana. Objetivo: 3 de fuerza (rutinas A, B y C en rotación, nunca dos días seguidos) y 2 de spinning. Si llevas días sin venir, la sesión vuelve con menos peso para que te reenganches sin riesgo. Cada sesión de fuerza empieza con core para el multífido y la zona lumbar, y sigue con tren superior en máquinas con la espalda apoyada. Antes de empezar te pregunto cómo está tu espalda y adapto la sesión.' }] : [];
   return [...intro, ...notes].map(n => `<section class="card note k-${n.kind}">
     <p class="eyebrow">${n.kind === 'warning' ? icon('warn') : icon('spark')} ${n.id === 'intro' ? 'Bienvenido' : 'Nota de tu entrenador'}</p>
     <h3>${esc(n.title)}</h3><p>${esc(n.body || '').replace(/\n/g, '<br>')}</p>
@@ -380,19 +418,23 @@ function projection() {
 }
 
 // ───────── acciones de sesión ─────────
-function startSession(tplKey, pain, type = 'fuerza') {
+function startSession(tplKey, pain, type = 'fuerza', adj = null) {
   unlockAudio();
   const d = P.todayISO();
-  const phase = P.phaseFor(d, S.profile.startDate);
-  const mode = type === 'core' ? 'normal' : pain >= 5 ? 'proteccion' : pain >= 3 ? 'suave' : 'normal';
-  const plan = P.buildSession(tplKey, { phase, settings: S.settings, mode });
+  const phase = C.programPhase(S.sessions, S.profile.startDate, d);
+  let mode = type === 'core' ? 'normal' : pain >= 5 ? 'proteccion' : pain >= 3 ? 'suave' : 'normal';
+  if (type === 'movilidad' && mode === 'suave') mode = 'normal'; // la sesión de movilidad ya es suave
+  const useAdj = type === 'fuerza' && mode !== 'proteccion' && adj && adj.key !== 'normal' ? adj : null;
+  const plan = P.buildSession(tplKey, { phase, settings: S.settings, mode, adj: useAdj });
   const id = uid();
-  const sType = mode === 'proteccion' ? 'movilidad' : type;
-  S.active = { sessionId: id, type: sType, template: plan.template, mode, phase, items: plan.items, idx: 0, startedAt: new Date().toISOString(), painBefore: pain, rest: null, guided: null, results: {} };
-  S.sessions[id] = { id, date: d, type: sType, template: plan.template, phase: phase.key, mode, status: 'active', painBefore: pain, startedAt: S.active.startedAt };
+  const sType = mode === 'proteccion' || type === 'movilidad' ? 'movilidad' : type;
+  const hold = !!(phase.hold || mode !== 'normal' || useAdj?.hold);
+  const adjInfo = useAdj ? { key: useAdj.key, tag: useAdj.tag, load: useAdj.load } : null;
+  S.active = { sessionId: id, type: sType, template: plan.template, mode, phase: { ...phase, hold }, adj: adjInfo, items: plan.items, idx: 0, startedAt: new Date().toISOString(), painBefore: pain, rest: null, guided: null, results: {} };
+  S.sessions[id] = { id, date: d, type: sType, template: plan.template, phase: phase.key, mode, status: 'active', painBefore: pain, startedAt: S.active.startedAt, summary: { adj: adjInfo } };
   enqueue('session', id);
   save();
-  ui.inSession = true; ui.sheet = null;
+  ui.inSession = true; ui.sheet = null; ui.another = false;
   acquireWake();
   say(mode === 'proteccion' ? 'Hoy cuidamos la espalda' : 'Vamos allá');
   render();
@@ -456,7 +498,7 @@ function finishSession(painAfter, rpe, notes) {
     status: 'done', finishedAt, painAfter, rpe, notes,
     durationMin: Math.round((Date.parse(finishedAt) - Date.parse(A.startedAt)) / 600) / 100,
     summary: {
-      results: A.results, volume: Math.round(volume),
+      results: A.results, volume: Math.round(volume), adj: A.adj || null,
       items: A.items.map(i => ({ id: i.id, status: i.status, sets: i.sets.filter(x => x.done).length })),
     },
   });
@@ -571,7 +613,7 @@ function viewSummary() {
     </div>
     ${res.length ? `<section class="card"><p class="eyebrow">${icon('up')} Ajustes para la próxima vez</p>${res.map(([id, r]) => `<div class="win ${r.dir || ''}"><b>${EXERCISES[id]?.name || id}</b><span>${esc(r.msg)}</span></div>`).join('')}</section>` : ''}
     ${s.painAfter != null && s.painBefore != null && s.painAfter - s.painBefore >= 2 ? `<section class="card note k-warning"><p class="eyebrow">${icon('warn')} Atención</p><p>Tu espalda ha empeorado durante la sesión. La próxima vez la app te propondrá una sesión suave. Si el dolor baja por la pierna o aparece hormigueo, consulta con tu médico.</p></section>` : ''}
-    ${nx ? `<section class="card subtle"><p class="muted small">Próximo entreno</p><p class="big-line">${cap(P.DAY_NAMES[nx.date.getDay()])} · ${nx.type === 'fuerza' ? P.TEMPLATES[nx.tpl].name : 'Spinning'}</p></section>` : ''}
+    ${nx ? `<section class="card subtle"><p class="muted small">Próximo día de gimnasio · recomendación</p><p class="big-line">${cap(P.DAY_NAMES[nx.date.getDay()])} · ${plannedLabel(nx)}</p></section>` : ''}
     <button class="btn primary xl" data-a="closeSummary">Volver al inicio</button>
   </main>`;
 }
@@ -669,10 +711,10 @@ function buildReport() {
   const since = new Date(Date.now() - 28 * 864e5).toISOString().slice(0, 10);
   const ses = Object.values(S.sessions).filter(s => s.status === 'done' && s.date >= since).sort((a, b) => a.date.localeCompare(b.date));
   const p = S.profile;
-  const phase = P.phaseFor(P.todayISO(), p.startDate);
+  const phase = C.programPhase(S.sessions, p.startDate, P.todayISO());
   let t = `RESUMEN APP GYM (últimas 4 semanas)\nPerfil: ${p.birthYear ? new Date().getFullYear() - p.birthYear + ' años, ' : ''}${p.weightKg || '?'} kg, ${p.heightCm || '?'} cm. Programa: semana ${phase.week} (${phase.name}).\nCondición: ${p.backNotes || 'columna lumbar sensible'}\n\n`;
   for (const s of ses) {
-    t += `${s.date} · ${s.type}${s.template && s.type !== 'spinning' ? ' ' + s.template : ''}${s.mode && s.mode !== 'normal' ? ' (' + s.mode + ')' : ''} · ${Math.round(s.durationMin || 0)} min · espalda ${s.painBefore ?? '-'}→${s.painAfter ?? '-'} · RPE ${s.rpe ?? '-'}${s.notes ? ' · nota: ' + s.notes : ''}\n`;
+    t += `${s.date} · ${s.type}${s.spinKind ? ' ' + s.spinKind : ''}${s.summary?.adj?.tag ? ' [' + s.summary.adj.tag + ']' : ''}${s.template && s.type !== 'spinning' ? ' ' + s.template : ''}${s.mode && s.mode !== 'normal' ? ' (' + s.mode + ')' : ''} · ${Math.round(s.durationMin || 0)} min · espalda ${s.painBefore ?? '-'}→${s.painAfter ?? '-'} · RPE ${s.rpe ?? '-'}${s.notes ? ' · nota: ' + s.notes : ''}\n`;
     const sets = Object.values(S.sets).filter(x => x.sessionId === s.id && !x.warmup);
     const byEx = {};
     for (const x of sets) (byEx[x.exId] = byEx[x.exId] || []).push(x);
@@ -733,7 +775,7 @@ function viewExercise(id) {
 // ───────── PERFIL ─────────
 function viewProfile() {
   const p = S.profile;
-  const phase = P.phaseFor(P.todayISO(), p.startDate);
+  const phase = C.programPhase(S.sessions, p.startDate, P.todayISO());
   const mets = Object.values(S.metrics).sort((a, b) => a.date.localeCompare(b.date));
   return `<header class="top"><div><h1>Perfil</h1></div>${syncPill()}</header>
   <section class="card">
@@ -756,13 +798,15 @@ function viewProfile() {
     </div>
     ${lineChart(mets.map(m => ({ x: m.date, y: m.kg })), { unit: 'kg', color: 'var(--c-core)' })}
   </section>
+  ${weekPrefsCard()}
   <section class="card">
     <p class="eyebrow">Copia en la nube y conexión con Claude</p>
     ${cloudBlock()}
   </section>
   <section class="card">
     <p class="eyebrow">Programa</p>
-    <p>Semana <b>${phase.week}</b> · ${phase.name}</p><p class="small muted">${phase.info}</p>
+    <p>Semana <b>${phase.week}</b> entrenada · ${phase.name}</p><p class="small muted">${phase.info}</p>
+    <p class="small muted">Las semanas cuentan solo si haces fuerza. Una semana sin venir funciona como descarga, y un parón de 4 semanas reinicia la adaptación.</p>
     <p class="small muted">Inicio: ${fmtDate(p.startDate)}</p>
     <button class="btn ghost sm" data-a="sheet" data-s="restart">Reiniciar el programa desde hoy</button>
   </section>
@@ -776,7 +820,21 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.0</p>`;
+  <p class="muted small center ver">App Gym · v1.1</p>`;
+}
+
+function weekPrefsCard() {
+  const t = C.targetsOf(S.prefs), gd = C.gymDaysOf(S.prefs);
+  const pick = (k, arr) => `<div class="seg-pick">${arr.map(n => `<button class="${t[k] === n ? 'on' : ''}" data-a="target" data-k="${k}" data-v="${n}">${n}</button>`).join('')}</div>`;
+  return `<section class="card">
+    <p class="eyebrow">Tu semana</p>
+    <p class="small muted">Cada mañana eliges qué haces; con esto la app reparte lo que falta.</p>
+    <div class="pick-row"><span>Fuerza por semana</span>${pick('fuerza', [2, 3, 4])}</div>
+    <div class="pick-row"><span>Spinning por semana</span>${pick('spinning', [0, 1, 2, 3])}</div>
+    <p class="small muted">Días que sueles poder ir</p>
+    <div class="seg-pick days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button class="${gd.includes(d) ? 'on' : ''}" data-a="gymDay" data-v="${d}">${P.DAY_SHORT[d]}</button>`).join('')}</div>
+    <p class="small muted">Lo recomendable: 3 de fuerza (2 como mínimo para mantener) y nunca dos días seguidos de fuerza.</p>
+  </section>`;
 }
 
 function cloudBlock() {
@@ -801,8 +859,11 @@ function viewOnboarding() {
     <div class="art-wrap" data-anim="bird_dog">${artSVG(EXERCISES.bird_dog.art, 0, 'big')}</div>
     <h1>Tu plan de fuerza,<br><span class="accent">pensado para tu espalda</span></h1>
     <p class="muted">Sesiones de máximo 45 minutos. La app te dice qué toca, en qué máquina, con qué peso y cuánto descansar. Y va subiendo la carga según cómo te va.</p>
-    <div class="week-demo">${[1, 2, 3, 4, 5, 6, 0].map(d => `<div class="day t-${P.WEEK_PLAN[d]}"><span>${P.DAY_SHORT[d]}</span><b>${P.WEEK_PLAN[d] === 'fuerza' ? 'F' : P.WEEK_PLAN[d] === 'spinning' ? 'S' : '·'}</b></div>`).join('')}</div>
-    <p class="small muted center">F = fuerza 45' · S = spinning 45'</p>
+    <ol class="how">
+      <li><b>Cada mañana eliges</b> fuerza o spinning. Te digo qué conviene según lo que llevas de semana.</li>
+      <li><b>La sesión se adapta</b> a los días que llevas sin venir, a si ayer hiciste fuerza y a cómo está tu espalda.</li>
+      <li><b>Objetivo semanal:</b> 3 de fuerza y 2 de spinning, 45 minutos como máximo.</li>
+    </ol>
     <section class="card">
       <div class="form">
         <label>¿Cómo te llamas?<input data-f="name" autocomplete="given-name"></label>
@@ -883,15 +944,10 @@ function viewSheet() {
       <button class="btn primary" data-a="saveKg" data-id="${s.id}">Guardar</button>`;
       break;
     }
-    case 'daytype':
-      body = `<h2>¿Qué haces hoy?</h2>
-      <button class="btn xl" data-a="setDay" data-v="fuerza">${icon('dumbbell')} Fuerza (${P.TEMPLATES[T.tpl].name})</button>
-      <button class="btn xl" data-a="setDay" data-v="spinning">${icon('bike')} Spinning</button>
-      <button class="btn xl" data-a="setDay" data-v="descanso">${icon('moon')} Descanso</button>
-      <button class="btn ghost" data-a="startCore">${icon('spark')} Solo core exprés (6 min)</button>`;
-      break;
     case 'spin':
       body = `<h2>Spinning hecho 🚴</h2>
+      <p class="muted">¿Cómo ha sido?</p>
+      <div class="seg-pick">${[['suave', 'Suave (zona 2)'], ['intenso', 'Intenso / intervalos']].map(([k, l]) => `<button class="${s.kind === k ? 'on' : ''}" data-a="spinKind" data-v="${k}">${l}</button>`).join('')}</div>
       <p class="muted">¿Cómo está tu espalda? (0-10)</p>
       <div class="painpad sm">${[...Array(11)].map((_, i) => `<button class="pain p${i} ${s.pain === i ? 'on' : ''}" data-a="spinPain" data-v="${i}">${i}</button>`).join('')}</div>
       <p class="muted">Esfuerzo (1-10)</p>
@@ -942,9 +998,24 @@ const actions = {
   resume: () => { ui.inSession = true; unlockAudio(); acquireWake(); render(); },
   painGo: d => {
     const v = +d.v;
-    const type = ui.sheet?.core ? 'core' : 'fuerza';
     const T = todayInfo();
-    startSession(type === 'core' ? 'X' : T.tpl, v, type);
+    if (T.choice === 'movilidad') startSession('M', v, 'movilidad');
+    else startSession(T.tpl, v, 'fuerza', T.plan.adj);
+  },
+  choose: d => {
+    const k = P.todayISO();
+    if (d.v) S.dayType[k] = d.v; else delete S.dayType[k];
+    save(); render(); scrollTo(0, 0);
+  },
+  another: () => { ui.another = true; delete S.dayType[P.todayISO()]; save(); render(); },
+  spinSheet: () => { ui.sheet = { type: 'spin', kind: todayInfo().plan.spin.kind }; render(); },
+  spinKind: d => { ui.sheet.kind = d.v; ui.sheet.min = val('spinMin'); render(); },
+  target: d => { S.prefs.targets = { ...C.targetsOf(S.prefs), [d.k]: +d.v }; save(); enqueue('profile', 'me'); render(); },
+  gymDay: d => {
+    const v = +d.v, cur = C.gymDaysOf(S.prefs);
+    const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
+    if (!next.length) { toast('Deja al menos un día'); return; }
+    S.prefs.gymDays = next; save(); enqueue('profile', 'me'); render();
   },
   startCore: () => { unlockAudio(); startSession('X', null, 'core'); },
   toggleSet: d => {
@@ -1026,17 +1097,16 @@ const actions = {
   finPain: d => { ui.sheet.pain = +d.v; ui.sheet.notes = val('notes'); render(); },
   finRpe: d => { ui.sheet.rpe = +d.v; ui.sheet.notes = val('notes'); render(); },
   finish: () => { const s = ui.sheet; finishSession(s.pain, s.rpe, val('notes')); },
-  closeSummary: () => { ui.summary = null; ui.tab = 'hoy'; render(); scrollTo(0, 0); },
+  closeSummary: () => { ui.summary = null; ui.another = false; ui.tab = 'hoy'; render(); scrollTo(0, 0); },
   saveNote: d => { updateSetting(d.id, { note: val('mnote') }); ui.sheet = null; save(); toast('Ajuste guardado'); },
   saveKg: d => { const v = num('kgset'); if (v == null) return; updateSetting(d.id, { kg: v }); ui.sheet = null; save(); toast('Peso actualizado'); },
-  setDay: d => { S.dayType[P.todayISO()] = d.v; save(); ui.sheet = null; render(); },
   spinPain: d => { ui.sheet.pain = +d.v; ui.sheet.min = val('spinMin'); render(); },
   spinRpe: d => { ui.sheet.rpe = +d.v; ui.sheet.min = val('spinMin'); render(); },
   saveSpin: () => {
     const s = ui.sheet, id = uid(), now = new Date();
     const min = num('spinMin') || 45;
-    S.sessions[id] = { id, date: P.todayISO(), type: 'spinning', status: 'done', painBefore: s.pain, painAfter: s.pain, rpe: s.rpe, startedAt: new Date(now - min * 6e4).toISOString(), finishedAt: now.toISOString(), durationMin: min, summary: {} };
-    enqueue('session', id); save(); ui.sheet = null; toast('Spinning guardado 🚴'); render();
+    S.sessions[id] = { id, date: P.todayISO(), type: 'spinning', spinKind: s.kind || 'suave', status: 'done', painBefore: s.pain, painAfter: s.pain, rpe: s.rpe, startedAt: new Date(now - min * 6e4).toISOString(), finishedAt: now.toISOString(), durationMin: min, summary: { spinKind: s.kind || 'suave' } };
+    enqueue('session', id); save(); ui.sheet = null; ui.another = false; toast('Spinning guardado 🚴'); render();
   },
   chartEx: d => { ui.chartEx = d.id; render(); },
   copyReport: async () => {

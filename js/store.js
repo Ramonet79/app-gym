@@ -140,6 +140,7 @@ async function pull() {
   if (prof.data && !pending.has('profile:me')) {
     const p = fromDb.profile(prof.data);
     S.profile = { ...(S.profile || {}), ...Object.fromEntries(Object.entries(p).filter(([, v]) => v != null)) };
+    if (prof.data.prefs && typeof prof.data.prefs === 'object') S.prefs = { ...S.prefs, ...prof.data.prefs };
   }
   for (const r of ses.data) if (!pending.has('session:' + r.id) && S.active?.sessionId !== r.id) S.sessions[r.id] = { ...(S.sessions[r.id] || {}), ...fromDb.session(r) };
   for (const r of sets.data) if (!pending.has('set:' + r.id)) S.sets[r.id] = fromDb.set(r);

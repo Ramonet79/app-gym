@@ -46,7 +46,6 @@ export const TEMPLATES = {
 };
 
 // getDay(): 0 domingo … 6 sábado
-export const WEEK_PLAN = { 1: 'fuerza', 2: 'spinning', 3: 'fuerza', 4: 'spinning', 5: 'fuerza', 6: 'descanso', 0: 'descanso' };
 export const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 export const DAY_SHORT = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 
@@ -57,15 +56,7 @@ export const parseISO = s => { const [y, m, d] = s.split('-').map(Number); retur
 export function mondayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return x; }
 export function weekDates(d = new Date()) { const m = mondayOf(d); return [...Array(7)].map((_, i) => { const x = new Date(m); x.setDate(m.getDate() + i); return x; }); }
 
-// ───── fases ─────
-export function phaseFor(dateISO, startISO) {
-  const w = Math.floor((mondayOf(parseISO(dateISO)) - mondayOf(parseISO(startISO || dateISO))) / 6048e5) + 1;
-  const week = Math.max(1, w);
-  if (week <= 2) return { week, key: 'adapt', name: 'Adaptación', sets: 2, load: 1, info: 'Pesos cómodos: te deben sobrar 3-4 repeticiones. Aprende la técnica y los ajustes de cada máquina.' };
-  const c = (week - 3) % 6;
-  if (c === 5) return { week, key: 'deload', name: 'Descarga', sets: 2, load: 0.85, info: 'Semana suave para asimilar: menos series y un 15 % menos de peso. No se sube peso.' };
-  return { week, key: 'build', name: 'Construcción', sets: 3, load: 1, info: 'Doble progresión: cuando completes todas las series en el tope de repeticiones, la app sube el peso.' };
-}
+// La fase del programa y la recomendación diaria están en coach.js (dependen del histórico real).
 
 export function nextStrengthTemplate(sessions) {
   const done = Object.values(sessions).filter(s => s.type === 'fuerza' && s.status === 'done' && 'ABC'.includes(s.template))
@@ -92,7 +83,8 @@ const roundTo = (v, step) => Math.round(v / step) * step;
 
 // ───── construcción de sesión ─────
 // mode: normal | suave (dolor 3-4) | proteccion (≥5)
-export function buildSession(tplKey, { phase, settings, mode = 'normal' }) {
+// adj: ajuste del entrenador según días sin entrenar { load, maxSets }. Los recortes no se multiplican: manda el más prudente.
+export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = null }) {
   const tpl = TEMPLATES[mode === 'proteccion' ? 'M' : tplKey];
   const items = [];
   for (const b of tpl.blocks) {
@@ -104,10 +96,11 @@ export function buildSession(tplKey, { phase, settings, mode = 'normal' }) {
       const ex = EXERCISES[id];
       let nSets = ex.kind === 'time' ? 1 : ex.group === 'fuerza' ? Math.min(ex.sets ?? 3, phase.sets) : (ex.sets ?? 2);
       if (mode !== 'normal') nSets = Math.min(nSets, 2);
+      if (adj?.maxSets && ex.group === 'fuerza') nSets = Math.min(nSets, adj.maxSets);
       let kg = st.kg;
-      if (kg != null) {
-        let k = kg * phase.load * (mode === 'suave' ? 0.8 : 1);
-        kg = roundTo(k, ex.incKg || 2.5);
+      if (kg != null && ex.kind === 'reps') {
+        const mul = Math.min(phase.load, mode === 'suave' ? 0.8 : 1, adj?.load ?? 1);
+        kg = roundTo(kg * mul, ex.incKg || 2.5);
       }
       const rest = ex.kind === 'time' ? 0 : (ex.rest ?? 60);
       const sets = [];
@@ -167,7 +160,7 @@ export function progress(id, st, sets, feel, back, phase) {
   s.calibrated = true;
   if (ex.kind === 'reps' && !ex.bodyweight) {
     const used = work.at(-1).kg ?? s.kg;
-    if (used != null && phase.key !== 'deload') s.kg = used;
+    if (used != null && !phase.hold) s.kg = used;
   }
   if (back) {
     s.backFlags = (s.backFlags || 0) + 1;
@@ -177,7 +170,7 @@ export function progress(id, st, sets, feel, back, phase) {
     return { st: s, msg: msg.join(' '), dir: 'down' };
   }
   s.backFlags = Math.max(0, (s.backFlags || 0) - 1);
-  if (phase.key === 'deload') return { st: s, msg: 'Semana de descarga: mantenemos.' };
+  if (phase.hold) return { st: s, msg: phase.key === 'deload' ? 'Semana de descarga: mantenemos tus pesos.' : 'Sesión ajustada: tus pesos de referencia se mantienen.' };
 
   if (ex.kind === 'reps') {
     const [lo, hi] = Array.isArray(ex.reps) ? ex.reps : [ex.reps, ex.reps];
