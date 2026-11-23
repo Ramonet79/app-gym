@@ -2,11 +2,13 @@ import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor } from './exercise
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
 import * as C from './coach.js';
+import * as M from './monitor.js';
 import { S, save, uid, enqueue, initCloud, cloud, onCloud, user, sync, signIn, signUp, signOut, resetPassword, updatePassword, hasCloud } from './store.js';
 
 const app = document.getElementById('app');
 const ui = { tab: 'hoy', sheet: null, ex: null, inSession: !!S.active, summary: null, chartEx: 'press_pecho', toast: null, busy: false };
 S.dayType = S.dayType || {};
+S.checkins = S.checkins || {};
 
 // ───────── utilidades ─────────
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -74,7 +76,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // Sin calendario fijo: cada mañana eliges y el entrenador (coach.js) recomienda y ajusta según el histórico.
 function todayInfo() {
   const now = new Date(), d = P.todayISO();
-  const plan = C.planToday({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: d });
+  const plan = C.planToday({ sessions: S.sessions, profile: S.profile, prefs: S.prefs, today: d, checkin: M.latestCheckin(S, d) });
   return { d, now, plan, phase: plan.phase, tpl: plan.tpl, choice: S.dayType[d] || null, done: sessionsOn(d) };
 }
 const REC_LABEL = { fuerza: 'Fuerza', spinning: 'Spinning', movilidad: 'Movilidad y core', descanso: 'Descanso' };
@@ -146,7 +148,9 @@ function viewToday() {
     <div class="strip">${strip}</div>
     <p class="strip-legend">${icon('check')} hecho · letra tenue = previsión si sigues mis recomendaciones</p>
   </section>
+  ${S.active ? '' : checkinCard()}
   ${S.active ? resumeCard() : todayCard(T)}
+  ${S.active ? '' : reviewCard(T)}
   ${notesCards()}
   ${lastWins()}
   `;
@@ -186,6 +190,70 @@ function todayCard(T) {
     <h2>Hoy toca recuperar</h2>
     <ul class="tips"><li>Camina 20-30 minutos: el disco se nutre con movimiento suave</li><li>No estés más de 45 min seguidos sentado: levántate y muévete</li><li>Si te apetece: bird-dog y curl-up en casa (5 min)</li></ul>
     <button class="btn ghost" data-a="choose" data-v="">Cambiar: sí voy al gimnasio</button>
+  </section>`;
+}
+
+function checkinCard() {
+  const due = M.checkinDue(S);
+  if (!due || S.prefs.ciLater === P.todayISO()) return '';
+  const m = due === 'month';
+  return `<section class="card ci-card">
+    <p class="eyebrow">${icon('spark')} ${m ? 'Revisión de 4 semanas' : 'Revisión semanal'}</p>
+    <h3>${m ? '¿Cómo vas este mes?' : '¿Cómo vas esta semana?'}</h3>
+    <p class="small muted">${m ? '2 minutos. Preparo tu informe del mes y reviso si el programa necesita cambios.' : '1 minuto: espalda, energía, sueño y agujetas. Con esto ajusto la carga.'}</p>
+    <div class="row2"><button class="btn primary" data-a="ciOpen" data-v="${due}">Responder</button><button class="btn ghost" data-a="ciLater">Luego</button></div>
+  </section>`;
+}
+
+function reviewCard(T) {
+  const rv = M.programReview(S, { phase: T.phase, targets: T.plan.targets });
+  if (!rv.length) return '';
+  const warn = rv.some(r => r.level === 'warn');
+  return `<section class="card note ${warn ? 'k-warning' : 'k-plan'} review">
+    <p class="eyebrow">${icon(warn ? 'warn' : 'up')} ${warn ? 'Atención' : 'Tu programa está listo para evolucionar'}</p>
+    ${rv.map(r => `<div class="rv"><b>${r.title}</b><p>${r.text}</p></div>`).join('')}
+    <p class="small muted">Esto lo actualizo yo: copia la petición y pégamela en una conversación con Claude. Leeré tu histórico y adaptaré fases, sesiones o máquinas.</p>
+    <button class="btn primary" data-a="reviewCopy">${icon('copy')} Copiar petición para Claude</button>
+    <button class="btn ghost sm" data-a="reviewSnooze">Ya se lo he pedido (ocultar 14 días)</button>
+  </section>`;
+}
+
+function coachPanel() {
+  const T = todayInfo();
+  const adh = M.adherence(S, T.plan.targets);
+  const sets7 = M.weeklySets(S);
+  const trends = M.strengthTrends(S).slice(0, 8);
+  const back = M.backTrend(S);
+  const rpe = M.rpeTrend(S);
+  const ci = M.latestCheckin(S, P.todayISO(), 14);
+  const ready = M.readiness(ci);
+  const f1 = v => v == null ? '–' : (Math.round(v * 10) / 10).toString().replace('.', ',');
+  const bars = Object.entries(M.MUSCLE_GROUPS).map(([k, g]) => {
+    const v = sets7[k], [lo, hi] = g.range, max = hi * 1.4;
+    const st = v < lo ? 'low' : v > hi ? 'high' : 'ok';
+    return `<div class="mg"><span class="mg-n">${g.name}</span>
+      <span class="mg-bar"><i class="zone" style="left:${lo / max * 100}%;width:${(hi - lo) / max * 100}%"></i><i class="val ${st}" style="width:${Math.min(100, v / max * 100)}%"></i></span>
+      <b class="mg-v ${st}">${f1(v)}</b></div>`;
+  }).join('');
+  const backArrow = back.recent == null || back.prev == null ? '' : back.recent > back.prev + 0.4 ? ' ↑' : back.recent < back.prev - 0.4 ? ' ↓' : ' =';
+  return `<section class="card panel">
+    <p class="eyebrow">${icon('chart')} Panel del entrenador</p>
+    <div class="tiles four">
+      <div class="tile"><b>${adh.pct ?? '–'}${adh.pct != null ? '%' : ''}</b><span>constancia 4 sem</span></div>
+      <div class="tile"><b>${ready ?? '–'}</b><span>disponibilidad</span></div>
+      <div class="tile"><b>${f1(back.recent)}${backArrow}</b><span>espalda (2 sem)</span></div>
+      <div class="tile"><b>${f1(rpe)}</b><span>esfuerzo medio</span></div>
+    </div>
+    <div class="wk-adh">${adh.weeks.map(w => `<div><i style="height:${Math.min(100, w.fuerza / T.plan.targets.fuerza * 100)}%"></i><small>${w.fuerza}/${T.plan.targets.fuerza}</small></div>`).join('')}</div>
+    <p class="small muted center">Sesiones de fuerza en las 4 últimas semanas completas</p>
+    <h4 class="pn-h">Series efectivas por grupo · últimos 7 días</h4>
+    <div class="mgs">${bars}</div>
+    <p class="small muted">La franja marca el rango recomendado para tu nivel. Por debajo: falta estímulo. Por encima: cuidado con la recuperación.</p>
+    <h4 class="pn-h">Fuerza estimada (1RM) · último mes</h4>
+    ${trends.length ? `<div class="trends">${trends.map(t => `<div class="tr"><span>${t.name}</span><b>${t.assist ? P.fmtKg(t.last.kg) + ' kg ayuda' : P.fmtKg(Math.round(t.last.v)) + ' kg'}</b>
+      <em class="${t.stalled ? 'st' : t.change > 0.5 ? 'up' : t.change < -0.5 ? 'dn' : ''}">${t.stalled ? 'Estancado' : t.assist ? (t.change > 0 ? '−' + P.fmtKg(t.change) + ' kg' : '=') : (t.change > 0 ? '+' : '') + Math.round(t.change) + ' %'}</em></div>`).join('')}</div>
+      <p class="small muted">1RM estimado = el peso que podrías mover una vez, calculado con tus series (fórmula de Epley). Sirve para ver la tendencia; nunca lo pruebes de verdad.</p>`
+      : '<p class="small muted">Aparecerá cuando hayas repetido cada ejercicio al menos 2 veces.</p>'}
   </section>`;
 }
 
@@ -631,6 +699,7 @@ function viewHistory() {
   const wkStreak = weekStreak();
   return `
   <header class="top"><div><h1>Tu progreso</h1></div>${syncPill()}</header>
+  ${coachPanel()}
   <div class="tiles">
     <div class="tile"><b>${inMonth.filter(s => s.type === 'fuerza').length}</b><span>fuerza este mes</span></div>
     <div class="tile"><b>${inMonth.filter(s => s.type === 'spinning').length}</b><span>spinning este mes</span></div>
@@ -723,6 +792,11 @@ function buildReport() {
     for (const [id, xs] of Object.entries(byEx)) {
       t += `   - ${EXERCISES[id]?.name || id}: ${xs.map(x => x.kg != null ? `${P.fmtKg(x.kg)}kg×${x.reps ?? x.secs + 's'}` : x.reps != null ? `${x.reps}${x.secs ? '×' + x.secs + 's' : ''}` : `${x.secs}s`).join(', ')}${s.summary?.results?.[id]?.msg ? ' → ' + s.summary.results[id].msg : ''}\n`;
     }
+  }
+  const cis = Object.values(S.checkins || {}).filter(c => c.date >= since).sort((a, b) => a.date.localeCompare(b.date));
+  if (cis.length) {
+    t += `\nRevisiones:\n`;
+    for (const c of cis) t += `${c.date} · ${c.kind === 'month' ? 'mensual' : 'semanal'} · disponibilidad ${c.readiness ?? '-'} · ${Object.entries(c.answers || {}).map(([k, v]) => k + '=' + v).join(', ')}\n`;
   }
   t += `\nAjustes actuales:\n`;
   for (const [id, st] of Object.entries(S.settings)) {
@@ -968,6 +1042,19 @@ function viewSheet() {
       <button class="btn primary" data-a="saveKg" data-id="${s.id}">Guardar</button>`;
       break;
     }
+    case 'checkin': {
+      const qs = { ...M.CHECKIN_Q, ...(s.kind === 'month' ? M.CHECKIN_MONTH_Q : {}) };
+      const ok = M.requiredKeys(s.kind).every(k => s.a[k] != null);
+      body = `<h2>${s.kind === 'month' ? 'Revisión de 4 semanas' : 'Revisión semanal'}</h2>
+      <p class="muted small">${s.kind === 'month' ? 'Con esto preparo tu informe del mes y decido si el programa necesita cambios.' : 'Con esto ajusto la carga de esta semana.'}</p>
+      ${Object.entries(qs).map(([k, q]) => `<div class="ci-q"><p>${q.q}</p>${q.hint ? `<small>${q.hint}</small>` : ''}
+        <div class="seg-pick wrap">${q.opts.map(([v, l]) => `<button class="${String(s.a[k]) === String(v) ? 'on' : ''}" data-a="ci" data-k="${k}" data-v="${v}">${l}</button>`).join('')}</div></div>`).join('')}
+      ${s.a.legs === 'si' ? '<div class="adj"><p><b>Importante:</b> dolor que baja por la pierna, hormigueo o pérdida de fuerza son señales para consultar a tu médico. Mientras tanto la app solo te propondrá movilidad y core suave.</p></div>' : ''}
+      <div class="row2"><label class="note-in">Peso hoy (kg)<input data-f="ciKg" inputmode="decimal" value="${esc(s.kg ?? '')}" placeholder="opcional"></label>${s.kind === 'month' ? `<label class="note-in">Cintura (cm)<input data-f="ciWaist" inputmode="decimal" value="${esc(s.waist ?? '')}" placeholder="a la altura del ombligo"></label>` : ''}</div>
+      <label class="note-in">¿Algo que deba saber? (opcional)<textarea data-f="ciNote" rows="2">${esc(s.note || '')}</textarea></label>
+      <button class="btn primary xl" data-a="ciSave" ${ok ? '' : 'disabled'}>Guardar revisión</button>`;
+      break;
+    }
     case 'swap': {
       const A = S.active, it = A.items[A.idx];
       const slot = it.slot || SLOT_OF[it.id] || it.id;
@@ -1013,7 +1100,8 @@ function viewSheet() {
       body = `<h2>Entrar</h2>${cloudBlock()}`;
       break;
   }
-  return `<div class="sheet-bg" data-a="closeSheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div>`;
+  const still = s.touched ? 'still' : '';
+  return `<div class="sheet-bg ${still}" data-a="closeSheet"></div><div class="sheet ${still}" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div>`;
 }
 
 // ───────── manejadores ─────────
@@ -1123,6 +1211,46 @@ const actions = {
   },
   pin: d => { updateSetting(d.slot, { swapTo: d.id }); save(); toast('Fijado: la app usará siempre este'); render(); },
   unpin: d => { updateSetting(d.id, { swapTo: null }); save(); toast('Vuelve a la rotación automática'); render(); },
+  ciOpen: d => { ui.sheet = { type: 'checkin', kind: d.v, a: {} }; render(); },
+  ciLater: () => { S.prefs.ciLater = P.todayISO(); save(); render(); },
+  ci: d => {
+    const sh = ui.sheet, el = document.querySelector('.sheet'), top = el?.scrollTop || 0;
+    Object.assign(sh, { kg: val('ciKg'), waist: val('ciWaist'), note: val('ciNote'), touched: true });
+    sh.a[d.k] = d.v !== '' && !isNaN(+d.v) ? +d.v : d.v;
+    render();
+    const el2 = document.querySelector('.sheet'); if (el2) el2.scrollTop = top;
+  },
+  ciSave: () => {
+    const sh = ui.sheet, d = P.todayISO(), id = uid();
+    const note = val('ciNote');
+    const c = { id, date: d, kind: sh.kind, answers: { ...sh.a, ...(note ? { note } : {}) } };
+    c.readiness = M.readiness(c);
+    S.checkins[id] = c; enqueue('checkin', id);
+    const kg = num('ciKg'), waist = num('ciWaist');
+    if (kg || waist) {
+      let m = Object.values(S.metrics).find(x => x.date === d);
+      if (!m) { m = { id: uid(), date: d }; S.metrics[m.id] = m; }
+      if (kg) { m.kg = kg; S.profile.weightKg = kg; enqueue('profile', 'me'); }
+      if (waist) m.waist = waist;
+      enqueue('metric', m.id);
+    }
+    ui.sheet = null; save();
+    if (sh.kind === 'month') { ui.tab = 'hist'; toast('Revisión guardada. Aquí tienes tu informe del mes'); scrollTo(0, 0); }
+    else toast(c.answers.legs === 'si' ? 'Guardado. Consulta con tu médico; mientras, movilidad y core suave' : 'Revisión guardada: plan de la semana ajustado');
+    render();
+  },
+  reviewCopy: async () => {
+    const T = todayInfo();
+    const t = M.updateRequest(M.programReview(S, { phase: T.phase, targets: T.plan.targets })) + '\n' + buildReport();
+    try { await navigator.clipboard.writeText(t); toast('Petición copiada. Pégamela en Claude.'); }
+    catch (e) { prompt('Copia este texto:', t); }
+  },
+  reviewSnooze: () => {
+    const T = todayInfo(), until = P.iso(new Date(Date.now() + 14 * 864e5));
+    S.prefs.reviewSnooze = { ...(S.prefs.reviewSnooze || {}) };
+    for (const r of M.programReview(S, { phase: T.phase, targets: T.plan.targets })) if (r.level !== 'warn') S.prefs.reviewSnooze[r.id] = until;
+    save(); enqueue('profile', 'me'); toast('Oculto 14 días'); render();
+  },
   busy: () => {
     ui.sheet = null;
     const A = S.active;

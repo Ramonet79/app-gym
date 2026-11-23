@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 const KEY = 'gymapp.v1';
 const blank = () => ({
-  profile: null, sessions: {}, sets: {}, settings: {}, notes: [], metrics: {},
+  profile: null, sessions: {}, sets: {}, settings: {}, notes: [], metrics: {}, checkins: {},
   active: null, queue: [], lastSync: null, lastUserId: null, prefs: { voice: true, sound: true },
 });
 function load() {
@@ -15,7 +15,7 @@ export function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } c
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 
 // ───── cola de sincronización ─────
-const TABLE = { profile: 'gym_profiles', session: 'gym_sessions', set: 'gym_set_logs', setting: 'gym_exercise_settings', metric: 'gym_body_metrics', note: 'gym_coach_notes' };
+const TABLE = { profile: 'gym_profiles', session: 'gym_sessions', set: 'gym_set_logs', setting: 'gym_exercise_settings', metric: 'gym_body_metrics', note: 'gym_coach_notes', checkin: 'gym_checkins' };
 export function enqueue(kind, key, op = 'upsert') {
   S.queue = S.queue.filter(q => !(q.kind === kind && q.key === key));
   S.queue.push({ kind, key, op });
@@ -31,6 +31,7 @@ const toDb = {
   setting: (st, id) => ({ user_id: user.id, exercise_id: id, weight_kg: st.kg ?? null, reps: st.reps ?? null, hold_s: st.hold ?? null, level: st.level || 0, back_flags: st.backFlags || 0, hard_streak: st.hardStreak || 0, machine_note: st.note || null, disabled: !!st.disabled, swap_to: st.swapTo || null, calibrated: !!st.calibrated, updated_at: st.updatedAt || new Date().toISOString(), updated_by: 'app' }),
   metric: m => ({ id: m.id, user_id: user.id, date: m.date, weight_kg: m.kg ?? null, waist_cm: m.waist ?? null, updated_at: new Date().toISOString() }),
   note: n => ({ id: n.id, user_id: user.id, title: n.title, body: n.body, kind: n.kind, active: n.active, read_at: n.readAt || null }),
+  checkin: c => ({ id: c.id, user_id: user.id, date: c.date, kind: c.kind, answers: c.answers || {}, readiness: c.readiness ?? null, updated_at: new Date().toISOString() }),
 };
 const fromDb = {
   session: r => ({ id: r.id, date: r.date, type: r.type, template: r.template, phase: r.phase, mode: r.mode, status: r.status, painBefore: r.pain_before, painAfter: r.pain_after, rpe: r.rpe, startedAt: r.started_at, finishedAt: r.finished_at, durationMin: r.duration_min != null ? +r.duration_min : null, notes: r.notes, summary: r.summary || {} }),
@@ -38,6 +39,7 @@ const fromDb = {
   setting: r => ({ kg: r.weight_kg != null ? +r.weight_kg : null, reps: r.reps, hold: r.hold_s, level: r.level, backFlags: r.back_flags, hardStreak: r.hard_streak, note: r.machine_note || '', disabled: r.disabled, swapTo: r.swap_to, calibrated: r.calibrated, updatedAt: r.updated_at, updatedBy: r.updated_by }),
   metric: r => ({ id: r.id, date: r.date, kg: r.weight_kg != null ? +r.weight_kg : null, waist: r.waist_cm != null ? +r.waist_cm : null }),
   note: r => ({ id: r.id, title: r.title, body: r.body, kind: r.kind, active: r.active, readAt: r.read_at, createdAt: r.created_at }),
+  checkin: r => ({ id: r.id, date: r.date, kind: r.kind, answers: r.answers || {}, readiness: r.readiness }),
   profile: r => ({ name: r.name, birthYear: r.birth_year, heightCm: r.height_cm != null ? +r.height_cm : null, weightKg: r.weight_kg != null ? +r.weight_kg : null, startDate: r.start_date, backNotes: r.back_notes }),
 };
 
@@ -75,6 +77,7 @@ function enqueueAll() {
   for (const id in S.sets) enqueue('set', id);
   for (const id in S.settings) enqueue('setting', id);
   for (const id in S.metrics) enqueue('metric', id);
+  for (const id in S.checkins || {}) enqueue('checkin', id);
 }
 
 let syncTimer = null, syncing = false;
@@ -96,7 +99,7 @@ export async function sync() {
 }
 
 async function push() {
-  const order = ['profile', 'session', 'set', 'setting', 'metric', 'note'];
+  const order = ['profile', 'session', 'set', 'setting', 'metric', 'note', 'checkin'];
   const batch = [...S.queue];
   for (const kind of order) {
     const items = batch.filter(q => q.kind === kind);
@@ -104,7 +107,7 @@ async function push() {
     const ups = [], dels = [];
     for (const q of items) {
       if (q.op === 'delete') { dels.push(q.key); continue; }
-      const src = kind === 'profile' ? S.profile : kind === 'session' ? S.sessions[q.key] : kind === 'set' ? S.sets[q.key] : kind === 'setting' ? S.settings[q.key] : kind === 'metric' ? S.metrics[q.key] : S.notes.find(n => n.id === q.key);
+      const src = kind === 'profile' ? S.profile : kind === 'session' ? S.sessions[q.key] : kind === 'set' ? S.sets[q.key] : kind === 'setting' ? S.settings[q.key] : kind === 'metric' ? S.metrics[q.key] : kind === 'checkin' ? S.checkins[q.key] : S.notes.find(n => n.id === q.key);
       if (src) ups.push(toDb[kind](src, q.key));
     }
     if (ups.length) {
@@ -128,15 +131,18 @@ async function push() {
 async function pull() {
   const pending = new Set(S.queue.map(q => q.kind + ':' + q.key));
   const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
-  const [prof, ses, sets, stg, notes, mets] = await Promise.all([
+  const [prof, ses, sets, stg, notes, mets, chk] = await Promise.all([
     sb.from('gym_profiles').select('*').maybeSingle(),
     sb.from('gym_sessions').select('*').gte('date', since).limit(2000),
     sb.from('gym_set_logs').select('*').gte('done_at', since).limit(20000),
     sb.from('gym_exercise_settings').select('*'),
     sb.from('gym_coach_notes').select('*').eq('active', true).order('created_at', { ascending: false }).limit(20),
     sb.from('gym_body_metrics').select('*').order('date').limit(1000),
+    sb.from('gym_checkins').select('*').order('date').limit(500),
   ]);
   for (const r of [prof, ses, sets, stg, notes, mets]) if (r.error) throw r.error;
+  S.checkins = S.checkins || {};
+  if (!chk.error) for (const r of chk.data) if (!pending.has('checkin:' + r.id)) S.checkins[r.id] = fromDb.checkin(r);
   if (prof.data && !pending.has('profile:me')) {
     const p = fromDb.profile(prof.data);
     S.profile = { ...(S.profile || {}), ...Object.fromEntries(Object.entries(p).filter(([, v]) => v != null)) };

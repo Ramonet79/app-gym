@@ -75,7 +75,7 @@ function spinPlan({ age, week, gapStr, gapAny, streakDays, strengthTomorrow, bac
 }
 
 // ───── recomendación del día ─────
-export function planToday({ sessions, profile, prefs, today }) {
+export function planToday({ sessions, profile, prefs, today, checkin = null }) {
   const targets = targetsOf(prefs), gymDays = gymDaysOf(prefs);
   const all = doneList(sessions);
   const past = all.filter(s => s.date < today);
@@ -107,13 +107,21 @@ export function planToday({ sessions, profile, prefs, today }) {
   const painUp = lastPain && lastPain.painAfter >= 3 && lastPain.painBefore != null && lastPain.painAfter - lastPain.painBefore >= 2;
 
   const phase = programPhase(sessions, profile?.startDate, today);
-  const adj = strengthAdjust(lastStr, gapStr);
+  let adj = strengthAdjust(lastStr, gapStr);
+  // revisión semanal: síntomas o mala recuperación
+  const ca = checkin?.answers || {};
+  const legs = ca.legs === 'si';
+  const lowReady = (ca.energy != null && ca.energy <= 2) || (ca.sleep === '<6' && (ca.soreness ?? 0) >= 4) || ca.back === 'peor';
+  if (lowReady && adj.key === 'normal') adj = { key: 'ready', load: 0.9, maxSets: 2, hold: true, tag: 'Recuperación', note: 'Tu última revisión indica poca recuperación (energía, sueño, agujetas o espalda). Esta semana, 2 series y −10 %: se progresa mejor descansado.' };
   const tpl = nextStrengthTemplate(sessions);
   const age = profile?.birthYear ? parseISO(today).getFullYear() - profile.birthYear : null;
 
   let rec, why = [];
   const fLine = `Llevas ${wF} de ${targets.fuerza} sesiones de fuerza esta semana.`;
-  if (painHigh) {
+  if (legs) {
+    rec = 'movilidad';
+    why.push('En tu revisión indicaste dolor que baja por la pierna u hormigueo. Hasta que lo valore tu médico: solo movilidad y core suave.');
+  } else if (painHigh) {
     rec = 'movilidad';
     why.push(`Tu última sesión terminó con la espalda en ${lastPain.painAfter}/10. Hoy movilidad y core suave: el spinning te tendría sentado y flexionado 45 minutos.`);
   } else if (gapStr === 0) {
@@ -138,9 +146,10 @@ export function planToday({ sessions, profile, prefs, today }) {
     rec = 'spinning';
     why.push(`Ya has cumplido la fuerza de la semana (${wF}/${targets.fuerza}). Te falta spinning: ${wS} de ${targets.spinning}.`);
   }
+  if (lowReady && !legs) why.push('Tu revisión semanal indica poca recuperación: la sesión de fuerza irá algo más suave.');
   if (painUp && !painHigh) why.push(`Ojo: la última vez la espalda subió de ${lastPain.painBefore} a ${lastPain.painAfter}. Antes de empezar te pregunto cómo está.`);
 
-  const spin = spinPlan({ age, week, gapStr, gapAny, streakDays, strengthTomorrow: rec === 'spinning' && remF > 0, backWarn: !!(painHigh || painUp) });
+  const spin = spinPlan({ age, week, gapStr, gapAny, streakDays, strengthTomorrow: rec === 'spinning' && remF > 0, backWarn: !!(painHigh || painUp || legs || ca.back === 'peor') });
 
   return { today, rec, why, targets, gymDays, week: { fuerza: wF, spinning: wS, remF, remS, daysLeft }, gapStr, gapAny, streakDays, phase, adj, tpl, spin, todayDone, lastStr };
 }
