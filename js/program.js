@@ -1,5 +1,5 @@
 // Programa: plantillas, calendario semanal, fases, construcción de sesión y progresión.
-import { EXERCISES } from './exercises.js';
+import { EXERCISES, ALTERNATIVES, MAIN_LIFTS, optionsFor } from './exercises.js';
 
 export const MAX_MIN = 45;
 
@@ -81,41 +81,66 @@ export function getSetting(settings, id) {
 
 const roundTo = (v, step) => Math.round(v / step) * step;
 
+// ───── variantes ─────
+// block 0 = semanas 1-8 (máquinas base), luego cambia cada 6 semanas.
+// Principales cambian cada 2 bloques; accesorios, cada bloque. Una variante fijada por el usuario (swapTo) manda.
+export function variantFor(slot, block = 0, settings = {}, used = new Set()) {
+  const pinned = settings[slot]?.swapTo;
+  if (pinned && EXERCISES[pinned] && !used.has(pinned)) return pinned;
+  const opts = optionsFor(slot).filter(id => !EXERCISES[id].swapOnly && !settings[id]?.disabled); // swapOnly: solo como recambio
+  if (!opts.length) return slot;
+  const step = MAIN_LIFTS.has(slot) ? Math.floor(block / 2) : block;
+  for (let i = 0; i < opts.length; i++) {
+    const id = opts[(step + i) % opts.length];
+    if (!used.has(id)) return id;
+  }
+  return slot;
+}
+export const hasAlternatives = slot => !!ALTERNATIVES[slot];
+
 // ───── construcción de sesión ─────
 // mode: normal | suave (dolor 3-4) | proteccion (≥5)
 // adj: ajuste del entrenador según días sin entrenar { load, maxSets }. Los recortes no se multiplican: manda el más prudente.
 export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = null }) {
   const tpl = TEMPLATES[mode === 'proteccion' ? 'M' : tplKey];
   const items = [];
+  const used = new Set();
   for (const b of tpl.blocks) {
-    for (let id of b.items) {
-      let st = getSetting(settings, id);
-      if (st.swapTo && EXERCISES[st.swapTo]) { id = st.swapTo; st = getSetting(settings, id); }
+    for (const slot of b.items) {
+      const id = ALTERNATIVES[slot] ? variantFor(slot, phase.block || 0, settings, used) : (settings[slot]?.swapTo && EXERCISES[settings[slot].swapTo] ? settings[slot].swapTo : slot);
+      const st = getSetting(settings, id);
       if (st.disabled) continue;
+      used.add(id);
       if (mode === 'suave' && st.backFlags >= 2) continue;
-      const ex = EXERCISES[id];
-      let nSets = ex.kind === 'time' ? 1 : ex.group === 'fuerza' ? Math.min(ex.sets ?? 3, phase.sets) : (ex.sets ?? 2);
-      if (mode !== 'normal') nSets = Math.min(nSets, 2);
-      if (adj?.maxSets && ex.group === 'fuerza') nSets = Math.min(nSets, adj.maxSets);
-      let kg = st.kg;
-      if (kg != null && ex.kind === 'reps') {
-        const mul = Math.min(phase.load, mode === 'suave' ? 0.8 : 1, adj?.load ?? 1);
-        kg = roundTo(kg * mul, ex.incKg || 2.5);
-      }
-      const rest = ex.kind === 'time' ? 0 : (ex.rest ?? 60);
-      const sets = [];
-      // serie de aproximación en el primer ejercicio de fuerza
-      if (ex.group === 'fuerza' && !items.some(i => EXERCISES[i.id].group === 'fuerza') && kg) {
-        sets.push({ warmup: true, kg: roundTo(kg * 0.5, ex.incKg || 2.5), reps: 10, done: false });
-      }
-      for (let i = 0; i < nSets; i++) {
-        sets.push({ kg, reps: ex.kind === 'reps' ? (Array.isArray(ex.reps) ? ex.reps[1] : ex.reps) : st.reps, hold: st.hold, done: false });
-      }
-      items.push({ id, g: b.g, sets, rest: mode === 'normal' && phase.key === 'adapt' && rest > 60 ? 60 : rest, status: 'todo' });
+      const first = EXERCISES[id].group === 'fuerza' && !items.some(i => EXERCISES[i.id].group === 'fuerza');
+      items.push(buildItem(id, { slot, g: b.g, phase, settings, mode, adj, first }));
     }
   }
   fitToTime(items);
   return { template: mode === 'proteccion' ? 'M' : tplKey, items };
+}
+
+// Un ejercicio con sus series. nSets fuerza el número de series de trabajo (al cambiar de ejercicio a mitad de sesión).
+export function buildItem(id, { slot = id, g, phase, settings, mode = 'normal', adj = null, first = false, nSets: forced = null }) {
+  const ex = EXERCISES[id];
+  const st = getSetting(settings, id);
+  let nSets = ex.kind === 'time' ? 1 : ex.group === 'fuerza' ? Math.min(ex.sets ?? 3, phase.sets) : (ex.sets ?? 2);
+  if (mode !== 'normal') nSets = Math.min(nSets, 2);
+  if (adj?.maxSets && ex.group === 'fuerza') nSets = Math.min(nSets, adj.maxSets);
+  if (forced) nSets = forced;
+  let kg = st.kg;
+  if (kg != null && ex.kind === 'reps') {
+    const mul = Math.min(phase.load, mode === 'suave' ? 0.8 : 1, adj?.load ?? 1);
+    kg = roundTo(ex.assist ? kg / mul : kg * mul, ex.incKg || 2.5); // en asistida, más ayuda = más fácil
+  }
+  const rest = ex.kind === 'time' ? 0 : (ex.rest ?? 60);
+  const sets = [];
+  // serie de aproximación en el primer ejercicio de fuerza (en asistida: con más ayuda)
+  if (first && kg) sets.push({ warmup: true, kg: roundTo(kg * (ex.assist ? 1.4 : 0.5), ex.incKg || 2.5), reps: 10, done: false });
+  for (let i = 0; i < nSets; i++) {
+    sets.push({ kg, reps: ex.kind === 'reps' ? (Array.isArray(ex.reps) ? ex.reps[1] : ex.reps) : st.reps, hold: st.hold, done: false });
+  }
+  return { id, slot, g: g || ex.group, sets, rest: mode === 'normal' && phase.key === 'adapt' && rest > 60 ? 60 : rest, status: 'todo' };
 }
 
 export function estimateItem(it) {
@@ -179,6 +204,16 @@ export function progress(id, st, sets, feel, back, phase) {
     if (ex.bodyweight) {
       if (allTop && feel !== 'duro') msg.push('Muy bien. Próxima vez, más lento y controlado.');
       return { st: s, msg: msg.join(' ') };
+    }
+    if (ex.assist) { // el peso es ayuda: progresar = quitar kilos
+      if (allTop && feel !== 'duro') { s.kg = Math.max(0, +(s.kg - ex.incKg).toFixed(2)); s.hardStreak = 0; return { st: s, msg: `Próxima vez: ${fmtKg(s.kg)} kg de ayuda 💪`, dir: 'up' }; }
+      if (anyLow || feel === 'duro') {
+        s.hardStreak = (s.hardStreak || 0) + 1;
+        if (s.hardStreak >= 2 && anyLow) { s.kg = +(s.kg + ex.incKg).toFixed(2); s.hardStreak = 0; return { st: s, msg: `Subimos la ayuda a ${fmtKg(s.kg)} kg para hacerlo con técnica limpia.`, dir: 'down' }; }
+        return { st: s, msg: `Mantenemos ${fmtKg(s.kg)} kg de ayuda.` };
+      }
+      s.hardStreak = 0;
+      return { st: s, msg: `Mantén ${fmtKg(s.kg)} kg de ayuda y busca ${hi} reps en todas las series.` };
     }
     if (allTop && feel !== 'duro') {
       s.kg = +(s.kg + (ex.incKg || 2.5)).toFixed(2); s.hardStreak = 0;
@@ -248,3 +283,6 @@ export function guidedSteps(id, set) {
   });
   return steps;
 }
+
+// Unidad del peso según el ejercicio
+export const kgUnit = ex => ex.assist ? 'kg ayuda' : ex.perHand ? 'kg c/u' : 'kg';

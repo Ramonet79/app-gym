@@ -28,18 +28,19 @@ export function programPhase(sessions, startISO, today) {
   const str = doneList(sessions).filter(s => isStrength(s) && (!startISO || s.date >= startISO) && s.date <= today);
   let from = 0;
   for (let i = 1; i < str.length; i++) if (daysBetween(str[i - 1].date, str[i].date) >= 28) from = i;
-  let block = str.slice(from);
-  if (block.length && daysBetween(block.at(-1).date, today) >= 28) block = [];
-  const weeks = [...new Set(block.map(s => weekKey(s.date)))];
+  let recentStr = str.slice(from);
+  if (recentStr.length && daysBetween(recentStr.at(-1).date, today) >= 28) recentStr = [];
+  const weeks = [...new Set(recentStr.map(s => weekKey(s.date)))];
   const cur = weekKey(today);
   if (!weeks.includes(cur)) weeks.push(cur);
   const week = weeks.length;
   let streak = 1;
   for (let i = weeks.length - 1; i > 0; i--) { if (daysBetween(weeks[i - 1], weeks[i]) === 7) streak++; else break; }
   const buildStreak = Math.min(streak, week - 2);
-  if (week <= 2) return { week, key: 'adapt', name: 'Adaptación', sets: 2, load: 1, info: 'Pesos cómodos: te deben sobrar 3-4 repeticiones. Aprende la técnica y los ajustes de cada máquina.' };
-  if (buildStreak > 0 && buildStreak % 6 === 0) return { week, key: 'deload', name: 'Descarga', sets: 2, load: 0.85, hold: true, info: 'Semana suave para asimilar: menos series y un 15 % menos de peso. No se sube peso.' };
-  return { week, key: 'build', name: 'Construcción', sets: 3, load: 1, info: 'Doble progresión: cuando completas todas las series en el tope de repeticiones con buena técnica, la app sube el peso.' };
+  const block = Math.floor(Math.max(0, week - 3) / 6); // 0: semanas 1-8, 1: 9-14, 2: 15-20…
+  if (week <= 2) return { week, block, key: 'adapt', name: 'Adaptación', sets: 2, load: 1, info: 'Pesos cómodos: te deben sobrar 3-4 repeticiones. Aprende la técnica y los ajustes de cada máquina.' };
+  if (buildStreak > 0 && buildStreak % 6 === 0) return { week, block, key: 'deload', name: 'Descarga', sets: 2, load: 0.85, hold: true, info: 'Semana suave para asimilar: menos series y un 15 % menos de peso. No se sube peso.' };
+  return { week, block, key: 'build', name: 'Construcción', sets: 3, load: 1, info: 'Doble progresión: cuando completas todas las series en el tope de repeticiones con buena técnica, la app sube el peso.' };
 }
 
 // ───── ajuste de la sesión de fuerza según el tiempo sin entrenar ─────

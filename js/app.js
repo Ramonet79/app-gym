@@ -1,4 +1,4 @@
-import { EXERCISES, GROUPS } from './exercises.js';
+import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor } from './exercises.js';
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
 import * as C from './coach.js';
@@ -229,6 +229,7 @@ function strengthCard(T, kind) {
   if (kind === 'fuerza') {
     if (T.plan.adj.note) notes.push(T.plan.adj.note);
     if (T.phase.key !== 'build') notes.push(`<b>${T.phase.name}.</b> ${T.phase.info}`);
+    if (T.phase.block > 0 && T.phase.week === 3 + 6 * T.phase.block) notes.push(`<b>Bloque nuevo.</b> ${T.phase.block % 2 === 0 ? 'Cambian los ejercicios principales y los accesorios' : 'Cambian los accesorios'} para seguir progresando. Los primeros días, pesos prudentes hasta calibrar.`);
   } else notes.push('Movilidad, core McGill y glúteo, sin carga para la columna. Para días con la espalda cargada o cuando no toca fuerza.');
   return `<section class="hero t-fuerza ${kind === 'movilidad' ? 't-mob' : ''}">
     <p class="eyebrow">Hoy · ${kind === 'movilidad' ? 'Movilidad' : 'Fuerza'}${kind === 'fuerza' && T.plan.adj.tag ? ` · <span class="tag">${T.plan.adj.tag}</span>` : ''}</p>
@@ -266,7 +267,7 @@ function setsSummary(it) {
   if (ex.kind === 'time') return `${ex.minutes} min`;
   const s = work[0];
   const t = P.targetText(it.id, s);
-  return `${work.length} × ${t}${s.kg != null && !ex.bodyweight ? ' · ' + P.fmtKg(s.kg) + ' kg' : ''}`;
+  return `${work.length} × ${t}${s.kg != null && !ex.bodyweight ? ' · ' + P.fmtKg(s.kg) + ' ' + P.kgUnit(ex) : ''}`;
 }
 
 function notesCards() {
@@ -330,7 +331,7 @@ function viewRunner() {
         </div>
       </details>
       <div class="r-actions">
-        <button class="btn ghost" data-a="busy">Máquina ocupada</button>
+        <button class="btn ghost" data-a="sheet" data-s="swap">Ocupada / cambiar</button>
         <button class="btn ghost" data-a="skipEx">Saltar</button>
       </div>
     </div>
@@ -345,7 +346,7 @@ function setsPanel(it, ex, k) {
     const label = s.warmup ? 'Aprox.' : ex.kind === 'time' ? 'Tiempo' : `Serie ${it.sets.filter((x, j) => !x.warmup && j <= i).length}`;
     let mid = '';
     if (ex.kind === 'reps') {
-      mid = `${ex.bodyweight ? '' : stepper('kg', i, P.fmtKg(s.kg), 'kg', s.done)}${stepper('reps', i, s.reps, ex.perSide ? 'por lado' : 'reps', s.done)}`;
+      mid = `${ex.bodyweight ? '' : stepper('kg', i, P.fmtKg(s.kg), P.kgUnit(ex), s.done)}${stepper('reps', i, s.reps, ex.perSide ? 'por lado' : 'reps', s.done)}`;
     } else if (ex.kind === 'carry') {
       mid = `${stepper('kg', i, P.fmtKg(s.kg), 'kg', s.done)}<div class="tgt">${s.hold} s/mano</div>`;
     } else {
@@ -396,7 +397,7 @@ function restPanel(it) {
     <div class="ring rest" style="--p:${1 - rem / R.total}"><div><b data-rest>${P.fmtClock(rem)}</b><span>Descansa</span></div></div>
     <div class="rest-info">
       <p class="muted small">Siguiente</p>
-      <p class="big-line">${nxt ? `Serie ${it.sets.filter((x, j) => !x.warmup && j <= k).length}${nxt.kg != null && !ex.bodyweight ? ' · ' + P.fmtKg(nxt.kg) + ' kg' : ''}` : 'Siguiente ejercicio'}</p>
+      <p class="big-line">${nxt ? `Serie ${it.sets.filter((x, j) => !x.warmup && j <= k).length}${nxt.kg != null && !ex.bodyweight ? ' · ' + P.fmtKg(nxt.kg) + ' ' + P.kgUnit(ex) : ''}` : 'Siguiente ejercicio'}</p>
       <div class="row3">
         <button class="btn ghost sm" data-a="restAdd" data-d="-15">−15</button>
         <button class="btn primary sm" data-a="restSkip">Listo</button>
@@ -429,7 +430,7 @@ function startSession(tplKey, pain, type = 'fuerza', adj = null) {
   const id = uid();
   const sType = mode === 'proteccion' || type === 'movilidad' ? 'movilidad' : type;
   const hold = !!(phase.hold || mode !== 'normal' || useAdj?.hold);
-  const adjInfo = useAdj ? { key: useAdj.key, tag: useAdj.tag, load: useAdj.load } : null;
+  const adjInfo = useAdj ? { key: useAdj.key, tag: useAdj.tag, load: useAdj.load, maxSets: useAdj.maxSets } : null;
   S.active = { sessionId: id, type: sType, template: plan.template, mode, phase: { ...phase, hold }, adj: adjInfo, items: plan.items, idx: 0, startedAt: new Date().toISOString(), painBefore: pain, rest: null, guided: null, results: {} };
   S.sessions[id] = { id, date: d, type: sType, template: plan.template, phase: phase.key, mode, status: 'active', painBefore: pain, startedAt: S.active.startedAt, summary: { adj: adjInfo } };
   enqueue('session', id);
@@ -493,7 +494,7 @@ function finishSession(painAfter, rpe, notes) {
   const s = S.sessions[A.sessionId];
   const finishedAt = new Date().toISOString();
   let volume = 0;
-  for (const it of A.items) for (const x of it.sets) if (x.done && !x.warmup && x.kg && EXERCISES[it.id].kind === 'reps') volume += x.kg * (x.reps || 0) * (EXERCISES[it.id].perSide ? 2 : 1);
+  for (const it of A.items) for (const x of it.sets) if (x.done && !x.warmup && x.kg && EXERCISES[it.id].kind === 'reps') { const e = EXERCISES[it.id]; if (!e.assist) volume += x.kg * (x.reps || 0) * (e.perSide || e.perHand ? 2 : 1); }
   Object.assign(s, {
     status: 'done', finishedAt, painAfter, rpe, notes,
     durationMin: Math.round((Date.parse(finishedAt) - Date.parse(A.startedAt)) / 600) / 100,
@@ -624,7 +625,8 @@ function viewHistory() {
   const month = P.todayISO().slice(0, 7);
   const inMonth = all.filter(s => s.date.startsWith(month));
   const painPts = all.filter(s => s.painBefore != null).slice(0, 30).reverse().map(s => ({ x: s.date, y: s.painBefore }));
-  const strengthIds = Object.keys(EXERCISES).filter(id => EXERCISES[id].group === 'fuerza').concat(['pallof', 'carry']);
+  const logged = new Set(Object.values(S.sets).map(x => x.exId));
+  const strengthIds = Object.keys(EXERCISES).filter(id => EXERCISES[id].group === 'fuerza' && !EXERCISES[id].bodyweight && (!SLOT_OF[id] || SLOT_OF[id] === id || logged.has(id))).concat(['pallof', 'carry']);
   const exPts = exerciseSeries(ui.chartEx);
   const wkStreak = weekStreak();
   return `
@@ -725,24 +727,45 @@ function buildReport() {
   t += `\nAjustes actuales:\n`;
   for (const [id, st] of Object.entries(S.settings)) {
     const e = EXERCISES[id]; if (!e) continue;
-    t += `- ${e.name}: ${st.kg != null ? P.fmtKg(st.kg) + ' kg' : ''}${st.hold ? ' ' + st.hold + ' s' : ''}${e.levels ? ' nivel ' + ((st.level || 0) + 1) : ''}${st.backFlags ? ' · molestias: ' + st.backFlags : ''}${st.note ? ' · ajuste: ' + st.note : ''}\n`;
+    t += `- ${e.name}: ${st.kg != null ? P.fmtKg(st.kg) + ' ' + P.kgUnit(e) : ''}${st.swapTo ? ' · fijado: ' + st.swapTo : ''}${st.hold ? ' ' + st.hold + ' s' : ''}${e.levels ? ' nivel ' + ((st.level || 0) + 1) : ''}${st.backFlags ? ' · molestias: ' + st.backFlags : ''}${st.note ? ' · ajuste: ' + st.note : ''}\n`;
   }
   return t;
 }
 
 // ───────── EJERCICIOS ─────────
 function viewLibrary() {
-  const groups = ['core', 'fuerza', 'warm', 'calma'];
-  return `<header class="top"><div><h1>Ejercicios</h1><p class="muted small">Toca uno para ver cómo se hace</p></div></header>
-  ${groups.map(g => `<h2 class="sec-title" style="--c:${GROUPS[g].color}"><i></i>${GROUPS[g].name}</h2>
-    <div class="lib">${Object.values(EXERCISES).filter(e => e.group === g).map(e => {
+  const isAlt = e => SLOT_OF[e.id] && SLOT_OF[e.id] !== e.id;
+  const sections = [
+    ['core', GROUPS.core.name, e => e.group === 'core'],
+    ['fuerza', GROUPS.fuerza.name, e => e.group === 'fuerza' && !isAlt(e)],
+    ['fuerza', 'Alternativas de fuerza (rotan o sustituyen)', e => isAlt(e)],
+    ['warm', GROUPS.warm.name, e => e.group === 'warm'],
+    ['calma', GROUPS.calma.name, e => e.group === 'calma'],
+  ];
+  return `<header class="top"><div><h1>Ejercicios</h1><p class="muted small">${Object.values(EXERCISES).filter(e => e.group !== 'cardio').length} ejercicios. Toca uno para ver cómo se hace</p></div></header>
+  ${sections.map(([g, title, fn]) => `<h2 class="sec-title" style="--c:${GROUPS[g].color}"><i></i>${title}</h2>
+    <div class="lib">${Object.values(EXERCISES).filter(fn).map(e => {
       const st = P.getSetting(S.settings, e.id);
       return `<button class="lib-card" data-a="openEx" data-id="${e.id}" style="--c:${GROUPS[g].color}">
         <div class="thumb">${artSVG(e.art, 1)}</div>
         <b>${e.name}</b>
-        <small>${st.kg != null && !e.bodyweight && (e.kind === 'reps' || e.kind === 'carry') ? P.fmtKg(st.kg) + ' kg' : e.levels ? 'Nivel ' + (st.level + 1) : e.muscles[0]}</small>
+        <small>${st.kg != null && !e.bodyweight && (e.kind === 'reps' || e.kind === 'carry') ? P.fmtKg(st.kg) + ' ' + P.kgUnit(e) : e.levels ? 'Nivel ' + (st.level + 1) : e.muscles[0]}</small>
       </button>`;
     }).join('')}</div>`).join('')}`;
+}
+
+function swapBtn(id, action, note = '', extra = '') {
+  const e = EXERCISES[id];
+  return `<button class="swap ${extra}" data-a="${action}" data-id="${id}"><span class="thumb">${artSVG(e.art, 1)}</span><span class="sw-txt"><b>${e.name}</b><small>${e.machine}</small>${note ? `<em>${note}</em>` : ''}</span></button>`;
+}
+
+function altSection(id, slot) {
+  const pinned = S.settings[slot]?.swapTo;
+  return `<section class="card"><p class="eyebrow">Variantes de este movimiento</p>
+    <p class="small muted">${pinned ? `Fijado: siempre <b>${EXERCISES[pinned].name}</b>.` : 'La app las rota sola: los accesorios cada 6 semanas y los ejercicios principales cada 12. Durante la sesión puedes cambiar a cualquiera si la máquina está ocupada.'}</p>
+    <div class="swaps">${optionsFor(slot).map(o => swapBtn(o, 'openEx', [o === slot ? 'Base' : EXERCISES[o].swapOnly ? 'Solo como recambio' : 'Alternativa', pinned === o ? 'fijado' : ''].filter(Boolean).join(' · '), o === id ? 'cur' : '')).join('')}</div>
+    ${pinned === id ? `<button class="btn ghost sm" data-a="unpin" data-id="${slot}">Volver a la rotación automática</button>` : EXERCISES[id].swapOnly ? '' : `<button class="btn ghost sm" data-a="pin" data-slot="${slot}" data-id="${id}">Usar siempre este</button>`}
+  </section>`;
 }
 
 function viewExercise(id) {
@@ -758,7 +781,7 @@ function viewExercise(id) {
     <p class="why">${ex.why}</p>
     <section class="card">
       <p class="eyebrow">Tu objetivo actual</p>
-      <p class="big-line">${ex.kind === 'reps' ? `${P.targetText(id, st)}${!ex.bodyweight && st.kg != null ? ' · ' + P.fmtKg(st.kg) + ' kg' : ''}` : ex.kind === 'time' ? ex.minutes + ' min' : P.targetText(id, st) + (ex.kind === 'carry' ? ' · ' + P.fmtKg(st.kg) + ' kg' : '')}</p>
+      <p class="big-line">${ex.kind === 'reps' ? `${P.targetText(id, st)}${!ex.bodyweight && st.kg != null ? ' · ' + P.fmtKg(st.kg) + ' ' + P.kgUnit(ex) : ''}` : ex.kind === 'time' ? ex.minutes + ' min' : P.targetText(id, st) + (ex.kind === 'carry' ? ' · ' + P.fmtKg(st.kg) + ' kg' : '')}</p>
       ${ex.levels ? `<p class="small muted">Nivel ${st.level + 1} de ${ex.levels.length}: ${ex.levels[st.level].name}</p>` : ''}
       <button class="mynote ${st.note ? '' : 'empty'}" data-a="sheet" data-s="note" data-id="${id}">${icon('gear')} ${st.note ? 'Mi ajuste: ' + esc(st.note) : 'Apunta tu ajuste de máquina'}</button>
       ${!ex.bodyweight && (ex.kind === 'reps' || ex.kind === 'carry') ? `<button class="btn ghost sm" data-a="sheet" data-s="kg" data-id="${id}">Cambiar peso de trabajo</button>` : ''}
@@ -768,7 +791,8 @@ function viewExercise(id) {
       <h4>Mientras lo haces</h4><ul class="ok">${ex.cues.map(x => `<li>${x}</li>`).join('')}</ul>
       <h4>Evita</h4><ul class="no">${ex.avoid.map(x => `<li>${x}</li>`).join('')}</ul>
     </section>
-    ${ex.kind === 'reps' && !ex.bodyweight || ex.kind === 'carry' ? `<section class="card"><p class="eyebrow">Evolución</p>${lineChart(pts, { unit: 'kg', color: 'var(--c-fuerza)' })}</section>` : ''}
+    ${ex.kind === 'reps' && !ex.bodyweight || ex.kind === 'carry' ? `<section class="card"><p class="eyebrow">Evolución</p>${lineChart(pts, { unit: P.kgUnit(ex), color: 'var(--c-fuerza)' })}</section>` : ''}
+    ${SLOT_OF[id] ? altSection(id, SLOT_OF[id]) : ''}
   </main>`;
 }
 
@@ -944,6 +968,20 @@ function viewSheet() {
       <button class="btn primary" data-a="saveKg" data-id="${s.id}">Guardar</button>`;
       break;
     }
+    case 'swap': {
+      const A = S.active, it = A.items[A.idx];
+      const slot = it.slot || SLOT_OF[it.id] || it.id;
+      const inSession = new Set(A.items.map(i => i.id));
+      const opts = ALTERNATIVES[slot] ? optionsFor(slot).filter(id => !inSession.has(id)) : [];
+      const later = A.items.some((x, k) => k > A.idx && x.status === 'todo');
+      body = `<h2>${EXERCISES[it.id].name}</h2>
+      ${later ? `<button class="btn xl" data-a="busy">${icon('clock')} Está ocupada: lo hago después</button>` : '<p class="muted small">Es el último ejercicio: si la máquina está ocupada, cámbialo por otro.</p>'}
+      ${opts.length ? `<p class="eyebrow sw-title">O cámbialo por</p>
+      <div class="swaps">${opts.map(id => swapBtn(id, 'swapTo', id === slot ? 'El de base' : EXERCISES[id].swapOnly ? 'Con tu peso, sin máquina' : '')).join('')}</div>
+      <label class="toggle"><input type="checkbox" id="pinSwap"><span>Usar siempre el que elija (no rotar)</span></label>`
+      : '<p class="muted small">Este ejercicio no tiene alternativas: forma parte de tu base de core y progresa por niveles.</p>'}`;
+      break;
+    }
     case 'spin':
       body = `<h2>Spinning hecho 🚴</h2>
       <p class="muted">¿Cómo ha sido?</p>
@@ -1069,7 +1107,24 @@ const actions = {
     if (r.msg) { ui.toast = { msg: r.msg, kind: r.dir || '', id: Date.now() }; const id = ui.toast.id; setTimeout(() => { if (ui.toast?.id === id) { ui.toast = null; render(); } }, 2600); }
     advance();
   },
+  swapTo: d => {
+    const A = S.active, it = A.items[A.idx];
+    const pin = document.getElementById('pinSwap')?.checked;
+    const slot = it.slot || SLOT_OF[it.id] || it.id;
+    const work = it.sets.filter(x => !x.warmup);
+    const doneWork = work.filter(x => x.done).length;
+    const nw = P.buildItem(d.id, { slot, g: it.g, phase: A.phase, settings: S.settings, mode: A.mode, adj: A.adj, nSets: Math.max(1, work.length - doneWork), first: it.sets.some(x => x.warmup && !x.done) });
+    if (it.sets.some(x => x.done)) { it.status = 'done'; A.items.splice(A.idx + 1, 0, nw); A.idx += 1; } // lo hecho se queda guardado
+    else A.items[A.idx] = nw;
+    if (pin) updateSetting(slot, { swapTo: d.id });
+    A.rest = null; A.guided = null; ui.sheet = null; save();
+    toast(pin ? `Cambiado y fijado: ${EXERCISES[d.id].name}` : `Cambiado: ${EXERCISES[d.id].name}`);
+    render(); scrollTo(0, 0);
+  },
+  pin: d => { updateSetting(d.slot, { swapTo: d.id }); save(); toast('Fijado: la app usará siempre este'); render(); },
+  unpin: d => { updateSetting(d.id, { swapTo: null }); save(); toast('Vuelve a la rotación automática'); render(); },
   busy: () => {
+    ui.sheet = null;
     const A = S.active;
     const cur = A.items[A.idx];
     const nextTodo = A.items.findIndex((x, k) => k > A.idx && x.status === 'todo');

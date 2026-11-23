@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin cobertura en el gimnasio.
-const VERSION = 'gym-v1.1.0';
+const VERSION = 'gym-v1.2.0';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/art.js', 'js/exercises.js', 'js/program.js', 'js/coach.js', 'js/store.js', 'js/config.js',
@@ -17,7 +17,8 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Supabase va directo a red
   // red primero (para recibir actualizaciones), caché si no hay conexión
   e.respondWith(
-    fetch(e.request).then(res => {
+    // no-cache: revalida con el servidor para no mezclar módulos de versiones distintas tras una actualización
+    fetch(e.request.mode === 'navigate' ? e.request : new Request(e.request, { cache: 'no-cache' })).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
       return res;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
