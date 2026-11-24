@@ -131,29 +131,36 @@ export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = n
 }
 
 // ───── orden por zonas ─────
-// calentamiento → core McGill (esterilla) → fuerza agrupada por zona → cardio extra y calma.
-// El core que no es de esterilla (Pallof en polea, paseo con mancuerna) se hace en su zona, al final de ese bloque.
-// Entre zonas se elige el orden que deja los ejercicios principales antes que los complementarios.
+// cardio (elíptica) → esterilla: gato-camello + 1 ejercicio de activación lumbar (bird-dog o dead bug)
+// → máquinas y poleas → peso libre → esterilla: resto del core → cardio extra y paseo final.
+// Si con ese orden un ejercicio principal quedara detrás de complementarios, se empieza por el peso libre.
+// El core que no es de esterilla (Pallof en polea, paseo con mancuerna) se hace al final de su zona.
+const ACTIVATION = ['bird_dog', 'dead_bug', 'curl_up'];
+const ZONE_PREF = ['maquinas', 'libre', 'suelo', 'cardio'];
 export function orderByZone(items) {
   const isMain = it => MAIN_LIFTS.has(it.slot || it.id);
   const warm = items.filter(it => it.g === 'warm');
   const coreFloor = items.filter(it => it.g === 'core' && zoneOf(it.id) === 'suelo');
+  const actId = ACTIVATION.find(id => coreFloor.some(it => it.id === id));
+  const activation = coreFloor.filter(it => it.id === actId);
+  const coreRest = coreFloor.filter(it => it.id !== actId);
   const strength = items.filter(it => it.g === 'fuerza' || (it.g === 'core' && zoneOf(it.id) !== 'suelo'));
   const tail = items.filter(it => !warm.includes(it) && !coreFloor.includes(it) && !strength.includes(it));
-  const zones = [...new Set(strength.map(it => zoneOf(it.id)))];
+  const zones = [...new Set(strength.map(it => zoneOf(it.id)))].sort((a, b) => ZONE_PREF.indexOf(a) - ZONE_PREF.indexOf(b));
   const groupOf = z => {
     const g = strength.filter(it => zoneOf(it.id) === z);
     return [...g.filter(it => it.g === 'fuerza' && isMain(it)), ...g.filter(it => it.g === 'fuerza' && !isMain(it)), ...g.filter(it => it.g === 'core')];
   };
   const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map(r => [x, ...r]));
   let best = zones, bestPen = Infinity;
-  for (const pz of perms(zones)) {
+  for (const pz of perms(zones)) { // el primero (máquinas → libre) gana en empate
     const seq = pz.flatMap(groupOf);
     let pen = 0, seenAcc = false;
-    for (const it of seq) { if (!isMain(it)) seenAcc = true; else if (seenAcc) pen++; } // el core de fuerza (Pallof, paseo) cuenta como complementario
+    for (const it of seq) { if (!isMain(it)) seenAcc = true; else if (seenAcc) pen++; }
     if (pen < bestPen) { bestPen = pen; best = pz; }
   }
-  return [...warm, ...coreFloor, ...best.flatMap(groupOf), ...tail];
+  // sin fuerza (movilidad, core exprés): el core va seguido tras la activación
+  return [...warm, ...activation, ...best.flatMap(groupOf), ...coreRest, ...tail];
 }
 
 // Dónde insertar un ejercicio extra: al final de su zona dentro de la fuerza; si no hay, antes del cardio/calma final

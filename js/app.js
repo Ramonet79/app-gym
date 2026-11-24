@@ -383,7 +383,7 @@ function setsSummary(it) {
 
 function notesCards() {
   const notes = S.notes.filter(n => n.active && !n.readAt);
-  const intro = !Object.keys(S.sessions).length ? [{ id: 'intro', kind: 'plan', title: 'Cómo funciona tu plan', body: 'Cada mañana eliges fuerza o spinning y te digo qué conviene más según lo que llevas de semana. Objetivo: 3 de fuerza (rutinas A, B y C en rotación, nunca dos días seguidos) y 2 de spinning. Si llevas días sin venir, la sesión vuelve con menos peso para que te reenganches sin riesgo. Cada sesión de fuerza empieza con core para el multífido y la zona lumbar, y sigue con tren superior en máquinas con la espalda apoyada. Antes de empezar te pregunto cómo está tu espalda y adapto la sesión.' }] : [];
+  const intro = !Object.keys(S.sessions).length ? [{ id: 'intro', kind: 'plan', title: 'Cómo funciona tu plan', body: 'Cada mañana eliges fuerza o spinning y te digo qué conviene más según lo que llevas de semana. Objetivo: 3 de fuerza (rutinas A, B y C en rotación, nunca dos días seguidos) y 2 de spinning. Si llevas días sin venir, la sesión vuelve con menos peso para que te reenganches sin riesgo. Cada sesión va por zonas para que no vayas y vuelvas: elíptica, 4 minutos de activación lumbar en la esterilla, máquinas, peso libre y, al final, el resto del core en la esterilla. Antes de empezar te pregunto cómo está tu espalda y adapto la sesión.' }] : [];
   return [...intro, ...notes].map(n => `<section class="card note k-${n.kind}">
     <p class="eyebrow">${n.kind === 'warning' ? icon('warn') : icon('spark')} ${n.id === 'intro' ? 'Bienvenido' : 'Nota de tu entrenador'}</p>
     <h3>${esc(n.title)}</h3><p>${esc(n.body || '').replace(/\n/g, '<br>')}</p>
@@ -1007,7 +1007,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.5</p>`;
+  <p class="muted small center ver">App Gym · v1.5.1</p>`;
 }
 
 function weekPrefsCard() {
