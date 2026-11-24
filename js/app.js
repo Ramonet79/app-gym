@@ -50,11 +50,20 @@ function toast(msg, kind = '') {
 }
 
 // ───────── audio, voz, pantalla encendida ─────────
+// En iPhone, una web que activa audio se convierte en "reproductor" y para la música de fondo.
+// Con la sesión de audio en modo 'ambient' los pitidos se MEZCLAN con tu música (iOS 16.4+).
+// La voz del sistema sí puede pausar la música, así que con "Escucho música" se cambia por pitidos.
+const musicMode = () => S.prefs.music !== false;
+function setAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { /* no soportado */ } }
+setAudioSession();
 let ac = null;
 function unlockAudio() {
-  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { /* sin audio */ }
-  try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(''); speechSynthesis.speak(u); } } catch (e) { /* sin voz */ }
+  setAudioSession();
+  if (S.prefs.sound) { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { /* sin audio */ } }
+  if (S.prefs.voice && !musicMode()) { try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(''); speechSynthesis.speak(u); } } catch (e) { /* sin voz */ } }
 }
+// Al salir de la sesión se libera el audio para no retener la sesión de sonido del móvil
+function releaseAudio() { try { ac?.close(); } catch (e) { /* nada */ } ac = null; try { window.speechSynthesis?.cancel(); } catch (e) { /* nada */ } }
 function beep(freq = 880, dur = 0.15, vol = 0.35) {
   if (!S.prefs.sound || !ac) return;
   try {
@@ -65,7 +74,9 @@ function beep(freq = 880, dur = 0.15, vol = 0.35) {
   } catch (e) { /* sin audio */ }
 }
 function say(text) {
-  if (!S.prefs.voice || !text || !window.speechSynthesis) return;
+  if (!text) return;
+  if (musicMode()) { beep(740, 0.12); setTimeout(() => beep(990, 0.12), 150); return; } // pitido doble en vez de voz
+  if (!S.prefs.voice || !window.speechSynthesis) return;
   try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'es-ES'; u.rate = 1.05; speechSynthesis.speak(u); } catch (e) { /* sin voz */ }
 }
 let wakeLock = null;
@@ -648,7 +659,8 @@ function finishSession(painAfter, rpe, notes) {
   releaseWake();
   ui.inSession = false; ui.sheet = null; ui.summary = s.id;
   beep(660, 0.12); setTimeout(() => beep(990, 0.25), 140);
-  say('Sesión terminada. Buen trabajo');
+  if (!musicMode()) say('Sesión terminada. Buen trabajo');
+  setTimeout(releaseAudio, 4000);
   render(); scrollTo(0, 0);
 }
 
@@ -656,7 +668,7 @@ function discardSession() {
   const A = S.active;
   for (const it of A.items) for (const x of it.sets) if (x.logId && S.sets[x.logId]) { delete S.sets[x.logId]; enqueue('set', x.logId, 'delete'); }
   delete S.sessions[A.sessionId]; enqueue('session', A.sessionId, 'delete');
-  S.active = null; save(); releaseWake();
+  S.active = null; save(); releaseWake(); releaseAudio();
   ui.inSession = false; ui.sheet = null; render();
 }
 
@@ -999,7 +1011,8 @@ function viewProfile() {
   </section>
   <section class="card">
     <p class="eyebrow">Durante la sesión</p>
-    <label class="toggle"><input type="checkbox" data-a="pref" data-k="voice" ${S.prefs.voice ? 'checked' : ''}><span>Voz que te guía (cambios de lado, descansos)</span></label>
+    <label class="toggle"><input type="checkbox" data-a="pref" data-k="music" ${musicMode() ? 'checked' : ''}><span>Escucho música mientras entreno: no cortarla (pitidos en vez de voz)</span></label>
+    <label class="toggle"><input type="checkbox" data-a="pref" data-k="voice" ${S.prefs.voice ? 'checked' : ''} ${musicMode() ? 'disabled' : ''}><span>Voz que te guía (cambios de lado, descansos)${musicMode() ? ' · desactivada con música' : ''}</span></label>
     <label class="toggle"><input type="checkbox" data-a="pref" data-k="sound" ${S.prefs.sound ? 'checked' : ''}><span>Pitidos de temporizador</span></label>
   </section>
   <section class="card note k-warning">
@@ -1007,7 +1020,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.5.1</p>`;
+  <p class="muted small center ver">App Gym · v1.5.2</p>`;
 }
 
 function weekPrefsCard() {
@@ -1369,7 +1382,7 @@ const actions = {
   },
   tmode: d => { S.prefs.timeMode = d.v; if (d.v === 'until' && (!S.prefs.until || untilDate(S.prefs.until) - Date.now() < 15 * 6e4)) S.prefs.until = defaultUntil(); save(); render(); },
   techToggle: (d, el, e) => { e.preventDefault(); S.active.techOpen = !S.active.techOpen; save(); render(); },
-  pauseSession: () => { ui.inSession = false; ui.sheet = null; releaseWake(); render(); },
+  pauseSession: () => { ui.inSession = false; ui.sheet = null; releaseWake(); releaseAudio(); render(); },
   endNow: () => { ui.sheet = { type: 'finish' }; render(); },
   discard: () => { if (confirm('¿Seguro? Se borrará esta sesión.')) discardSession(); },
   finPain: d => { ui.sheet.pain = +d.v; ui.sheet.notes = val('notes'); render(); },
@@ -1421,7 +1434,7 @@ const actions = {
     m.kg = kg; S.profile.weightKg = kg;
     enqueue('metric', m.id); enqueue('profile', 'me'); save(); toast('Peso registrado'); render();
   },
-  pref: (d, el) => { S.prefs[d.k] = el.checked; save(); enqueue('profile', 'me'); },
+  pref: (d, el) => { S.prefs[d.k] = el.checked; save(); enqueue('profile', 'me'); if (d.k === 'music') render(); },
   restart: () => { S.profile.startDate = P.todayISO(); enqueue('profile', 'me'); save(); ui.sheet = null; toast('Programa reiniciado: semana 1'); },
   export: () => {
     const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
