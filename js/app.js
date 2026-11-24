@@ -1,4 +1,4 @@
-import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor, ZONES, zoneOf, setZoneOverrides } from './exercises.js';
+import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor, ZONES, zoneOf, setZoneOverrides, TECHNOGYM } from './exercises.js';
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
 import * as C from './coach.js';
@@ -443,7 +443,7 @@ function viewRunner() {
       ${zoneChange(A, it)}
       <div class="art-wrap" data-anim="${it.id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
       <h1 class="ex-name">${ex.name}</h1>
-      <p class="where">${icon('pin')} ${ex.machine}</p>
+      ${whereBox(it.id)}
       <button class="mynote ${st.note ? '' : 'empty'}" data-a="sheet" data-s="note" data-id="${it.id}">${icon('gear')} ${st.note ? 'Mi ajuste: ' + esc(st.note) : 'Apunta tu ajuste (asiento, altura, agarre…)'}</button>
       ${guided ? guidedPanel(it) : setsPanel(it, ex, k)}
       <details class="tech" ${A.techOpen ? 'open' : ''}><summary data-a="techToggle">Técnica y seguridad</summary>
@@ -922,11 +922,20 @@ function zoneChange(A, it) {
   return `<div class="mode-banner zbanner z-${z}">${icon('pin')}<span>Cambia a la ${ZONES[z].name.toLowerCase()} · ${here} ${here === 1 ? 'ejercicio' : 'ejercicios'} aquí</span></div>`;
 }
 
+// Dónde se hace: máquina Technogym (nombre de la placa) + zona
+function whereBox(id) {
+  const ex = EXERCISES[id], tg = TECHNOGYM[id], z = zoneOf(id);
+  return `<div class="where-box z-${z}">
+    <div class="wb-main">${icon('pin')}<div><b>${tg ? tg.name : ex.machine}</b><small>${tg ? tg.what : ''}</small></div></div>
+    <p class="wb-sub">${ZONES[z].name}${tg && !/Esterilla|mancuerna|Banco/i.test(tg.name) ? ' · busca este nombre en la placa de la máquina' : ''}</p>
+  </div>`;
+}
+
 const slowBadge = ex => ex.art?.B && !ex.art.at && !(ex.art.dur < 2000) ? `<span class="slow-badge ${ui.slow ? 'on' : ''}">${ui.slow ? 'Cámara lenta' : 'Toca: cámara lenta'}</span>` : '';
 
 function swapBtn(id, action, note = '', extra = '') {
   const e = EXERCISES[id];
-  return `<button class="swap ${extra}" data-a="${action}" data-id="${id}"><span class="thumb">${artSVG(e.art, 1)}</span><span class="sw-txt"><b>${e.name}</b><small>${e.machine}</small>${note ? `<em>${note}</em>` : ''}</span></button>`;
+  return `<button class="swap ${extra}" data-a="${action}" data-id="${id}"><span class="thumb">${artSVG(e.art, 1)}</span><span class="sw-txt"><b>${e.name}</b><small>${TECHNOGYM[id] ? TECHNOGYM[id].name + ' · ' : ''}${e.machine}</small>${note ? `<em>${note}</em>` : ''}</span></button>`;
 }
 
 function altSection(id, slot) {
@@ -946,7 +955,7 @@ function viewExercise(id) {
     <header class="r-top"><button class="icon-btn" data-a="closeEx" aria-label="Volver">${icon('back')}</button><span class="block-chip">${GROUPS[ex.group].name}</span><span></span></header>
     <div class="art-wrap" data-anim="${id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
     <h1 class="ex-name">${ex.name}</h1>
-    <p class="where">${icon('pin')} ${ex.machine}</p>
+    ${whereBox(id)}
     <div class="chips">${ex.muscles.map(m => `<span class="chip">${m}</span>`).join('')}</div>
     <p class="why">${ex.why}</p>
     <section class="card">
@@ -1020,7 +1029,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.5.2</p>`;
+  <p class="muted small center ver">App Gym · v1.6</p>`;
 }
 
 function weekPrefsCard() {

@@ -529,18 +529,12 @@ export const EXERCISES = {
   },
   // Tríceps
   triceps_maquina: {
-    name: 'Fondos en máquina sentado', group: 'fuerza', kind: 'reps', sets: 2, reps: [10, 12], rest: 60, startKg: 25, incKg: 2.5,
-    machine: 'Máquina de fondos sentado (o de extensión de tríceps)', muscles: ['Tríceps', 'Pectoral inferior'],
-    setup: ['Espalda pegada al respaldo', 'Asas a la altura de las costillas'],
-    cues: ['Empuja hacia abajo hasta estirar los brazos', 'Codos pegados al cuerpo', 'Sube despacio'],
-    avoid: ['Inclinarte hacia delante', 'Encoger los hombros'],
-    why: 'Tríceps con mucha carga posible y la espalda apoyada.',
-    art: {
-      back: CHAIR,
-      A: { ...SEATED, e: [52, 86], w: [72, 96] },
-      B: { e: [68, 94], w: [70, 116] },
-      dyn: p => L(p.w[0], p.w[1], 30, 104, 5) + grip(p.w),
-    },
+    name: 'Extensión de tríceps en máquina', group: 'fuerza', kind: 'reps', sets: 2, reps: [10, 12], rest: 60, startKg: 15, incKg: 2.5,
+    machine: 'Máquina de extensión de tríceps sentado, con los codos apoyados en un pupitre', muscles: ['Tríceps'],
+    setup: ['Asiento: codos alineados con el eje de giro de la máquina', 'Brazos apoyados en el pupitre, espalda erguida'],
+    cues: ['Estira los brazos hasta casi bloquear', 'Aprieta 1 s abajo', 'Vuelve despacio sin despegar los codos'],
+    avoid: ['Levantar los codos del apoyo', 'Echar el cuerpo hacia delante'],
+    why: 'Tríceps guiado, con los brazos apoyados y el tronco quieto: cero carga para la zona lumbar.',
   },
   triceps_unilateral: {
     name: 'Extensión de tríceps a una mano en polea', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], perSide: true, rest: 45, startKg: 5, incKg: 1.25,
@@ -634,6 +628,7 @@ export const EXERCISES = {
 // Dibujos derivados (misma máquina, otro agarre)
 const X = EXERCISES;
 X.cardio_z2.art = X.spinning.art;
+X.triceps_maquina.art = { ...X.curl_maquina.art, A: { ...X.curl_maquina.art.A, w: [93, 62] }, B: { w: [120, 107] } };
 X.jalon_neutro.art = { ...X.jalon.art, dyn: p => cable(82, 8, p.w) + grip(p.w) };
 X.press_inclinado_mancuernas.art = { ...X.press_inclinado.art, back: L(62, 114, 42, 58, 9) + SEAT, dyn: p => db(p.w) };
 X.remo_polea_unilateral.art = { ...X.remo_polea.art, A: { ...X.remo_polea.art.A, e2: [70, 100], w2: [86, 104] } };
@@ -676,7 +671,7 @@ const STEPS = {
   cruce_poleas: ['Junta delante', 'Abre despacio', 'Codos fijos'],
   curl_mancuernas_inclinado: ['Sube girando la palma', 'Baja en 2-3 s', 'Codos quietos'],
   curl_polea: ['Sube', 'Baja despacio', 'Codos pegados'],
-  triceps_maquina: ['Empuja abajo', 'Sube despacio', 'Espalda apoyada'],
+  triceps_maquina: ['Estira los brazos', 'Vuelve despacio', 'Codos apoyados'],
   triceps_unilateral: ['Estira abajo', 'Sube hasta 90º', 'Codo quieto'],
   laterales_maquina: ['Codos hacia fuera', 'Baja despacio', 'Hombros abajo'],
   laterales_polea: ['Sube al lado', 'Baja en 2-3 s', 'Tronco quieto'],
@@ -740,3 +735,45 @@ for (const [z, ids] of Object.entries(ZONE_OF)) for (const id of ids) if (EXERCI
 let ZONE_OVERRIDE = {};
 export const setZoneOverrides = m => { ZONE_OVERRIDE = m || {}; };
 export const zoneOf = id => ZONE_OVERRIDE[id] || EXERCISES[id]?.zone || 'suelo';
+
+// ───── Máquina concreta en un gimnasio Technogym ─────
+// Nombre tal como aparece en la placa de la máquina (líneas Selection, Element+, Artis o Pure Strength).
+// Son máquinas estándar que existen, con estos nombres u otros parecidos, en cualquier gimnasio.
+export const TECHNOGYM = {
+  eliptica: { name: 'Synchro o Vario', what: 'elíptica' },
+  caminar: { name: 'Run', what: 'cinta, a paso suave (o paseo por la sala)' },
+  spinning: { name: 'Group Cycle', what: 'bici de la sala de ciclo' },
+  cardio_z2: { name: 'Recline', what: 'bici con respaldo (o Synchro/Vario, o Run inclinada caminando)' },
+  press_pecho: { name: 'Chest Press', what: 'press de pecho sentado' },
+  press_inclinado: { name: 'Incline Chest Press', what: 'press inclinado (suele ser de discos, línea Pure Strength). Si no hay, usa la Chest Press con el asiento más bajo' },
+  remo_pecho: { name: 'Low Row', what: 'remo sentado con apoyo de pecho' },
+  remo_polea: { name: 'Low Pulley', what: 'polea baja con banco y apoyo de pies (o la polea baja del Crossover)' },
+  remo_polea_unilateral: { name: 'Low Pulley', what: 'polea baja con agarre de una mano' },
+  press_hombro: { name: 'Shoulder Press', what: 'press de hombro sentado' },
+  jalon: { name: 'Lat Machine', what: 'jalón al pecho con barra' },
+  jalon_neutro: { name: 'Vertical Traction', what: 'jalón con agarres paralelos (o Lat Machine con triángulo)' },
+  dominada_asistida: { name: 'Kneeling Easy Chin Dip', what: 'dominadas asistidas con apoyo de rodillas' },
+  pec_deck: { name: 'Pectoral', what: 'contractor de pecho (en algunas: Dual Pectoral / Reverse Fly)' },
+  pajaros_maquina: { name: 'Upper Back', what: 'hombro posterior (o Reverse Fly / Rear Delt en la Dual Pectoral)' },
+  laterales_maquina: { name: 'Delts Machine', what: 'elevaciones laterales guiadas' },
+  curl_maquina: { name: 'Arm Curl', what: 'curl de bíceps en pupitre' },
+  triceps_maquina: { name: 'Arm Extension', what: 'extensión de tríceps en pupitre' },
+  face_pull: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea alta con cuerda' },
+  triceps_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea alta con cuerda o barra' },
+  triceps_unilateral: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea alta con agarre de una mano' },
+  pallof: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea a la altura del pecho' },
+  cruce_poleas: { name: 'Crossover', what: 'las dos poleas altas' },
+  curl_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea baja con barra corta' },
+  laterales_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea baja con agarre de una mano' },
+  remo_invertido: { name: 'Multipower', what: 'máquina Smith, con la barra a la altura de la cintura' },
+  flexiones_inclinadas: { name: 'Multipower o banco', what: 'barra de la Smith a la altura de la cadera, o un banco' },
+  press_mancuernas: { name: 'Banco plano + mancuernas', what: 'zona de peso libre' },
+  press_inclinado_mancuernas: { name: 'Banco regulable + mancuernas', what: 'respaldo a 30º' },
+  press_hombro_mancuernas: { name: 'Banco regulable + mancuernas', what: 'respaldo vertical' },
+  remo_mancuerna: { name: 'Banco plano + mancuerna', what: 'rodilla y mano en el banco' },
+  y_inclinado: { name: 'Banco regulable + mancuernas', what: 'respaldo a 45º, boca abajo' },
+  curl_mancuernas_inclinado: { name: 'Banco regulable + mancuernas', what: 'respaldo a 45-60º' },
+  elev_laterales: { name: 'Banco regulable + mancuernas', what: 'respaldo vertical' },
+  carry: { name: 'Mancuerna', what: 'pasillo libre de la zona de peso libre' },
+};
+for (const id of ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal']) TECHNOGYM[id] = { name: 'Esterilla', what: 'zona de estiramientos o funcional' };

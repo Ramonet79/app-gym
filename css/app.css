@@ -514,3 +514,11 @@ p { margin: 6px 0; }
 .next-ex b { color: var(--text); }
 .next-ex.moves { color: var(--c-warm); }
 .mode-banner > span { flex: 1; text-align: left; } .mode-banner .ic { flex: none; }
+
+/* ── máquina Technogym ── */
+.where-box { margin: 6px 0 10px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--z) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--z) 35%, transparent); }
+.wb-main { display: flex; gap: 10px; align-items: flex-start; }
+.wb-main .ic { width: 20px; height: 20px; color: var(--z); flex: none; margin-top: 2px; }
+.wb-main b { display: block; font-size: 18px; letter-spacing: -.01em; }
+.wb-main small { display: block; color: var(--muted); font-size: 13.5px; line-height: 1.3; }
+.wb-sub { margin: 6px 0 0 30px; font-size: 12.5px; color: var(--z); font-weight: 650; }
