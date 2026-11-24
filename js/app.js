@@ -1,4 +1,5 @@
-import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor, ZONES, zoneOf, setZoneOverrides, TECHNOGYM } from './exercises.js';
+import { EXERCISES, GROUPS, ALTERNATIVES, SLOT_OF, optionsFor, ZONES, zoneOf, setZoneOverrides, TECHNOGYM, AREAS, areasOf } from './exercises.js';
+import * as LB from './library.js';
 import { artSVG, animate, stopAnim } from './art.js';
 import * as P from './program.js';
 import * as C from './coach.js';
@@ -6,7 +7,12 @@ import * as M from './monitor.js';
 import { S, save, uid, enqueue, initCloud, cloud, onCloud, user, sync, signIn, signUp, signOut, resetPassword, updatePassword, hasCloud } from './store.js';
 
 const app = document.getElementById('app');
-const ui = { tab: 'hoy', sheet: null, ex: null, inSession: !!S.active, summary: null, chartEx: 'press_pecho', toast: null, busy: false };
+const ui = { tab: 'hoy', sheet: null, ex: null, inSession: !!S.active, summary: null, chartEx: 'press_pecho', toast: null, busy: false, q: '', libArea: 'all', gen: null };
+// Rutina a medida: lo elegido en la biblioteca se guarda en el móvil (no hace falta subirlo)
+const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } } };
+ui.pick = LS.get('gymapp.pick', []).filter(id => EXERCISES[id]);
+ui.libZone = LS.get('gymapp.libZone', 'maquinas');
+const savePick = () => LS.set('gymapp.pick', ui.pick);
 S.dayType = S.dayType || {};
 S.checkins = S.checkins || {};
 setZoneOverrides(S.prefs.zones);
@@ -39,6 +45,9 @@ const ICONS = {
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  shuffle: '<path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
 };
 
@@ -133,6 +142,8 @@ function render() {
   else if (ui.ex) html = viewExercise(ui.ex);
   else html = shell();
   app.innerHTML = html + (ui.sheet ? viewSheet() : '') + (ui.toast ? `<div class="toast ${ui.toast.kind}" role="status">${ui.toast.msg}</div>` : '');
+  const chip = app.querySelector('.achip.on'); // que se vea la zona del cuerpo elegida
+  if (chip) chip.parentElement.scrollLeft = chip.offsetLeft - chip.parentElement.clientWidth / 2 + chip.offsetWidth / 2;
   const a = app.querySelector('[data-anim]');
   if (a && !ui.sheet) animate(a.querySelector('svg'), EXERCISES[a.dataset.anim].art, { slow: !!ui.slow });
   document.body.classList.toggle('lock', !!ui.sheet);
@@ -307,6 +318,7 @@ function choiceCard(T) {
       <button class="btn sm ${p.rec === 'movilidad' ? 'rec' : ''}" data-a="choose" data-v="movilidad">${icon('spark')} Movilidad</button>
       <button class="btn sm ${p.rec === 'descanso' ? 'rec' : ''}" data-a="choose" data-v="descanso">${icon('moon')} Descanso</button>
     </div>
+    <button class="btn ghost pick-own" data-a="tab" data-t="lib">${icon('list')} ${ui.pick.length ? `Mi rutina a medida (${ui.pick.length})` : 'Prefiero elegir yo los ejercicios'}</button>
   </section>`;
 }
 
@@ -324,7 +336,7 @@ function zoneRuns(items) {
 }
 const zoneRoute = items => `<div class="zroute">${zoneRuns(items).map(r => `<span class="zr z-${r.z}">${ZONES[r.z].short}</span>`).join('<i>→</i>')}</div>`;
 
-function timeBox(est = 0, T = null) {
+function timeBox(est = 0, T = null, custom = false) {
   const b = budget();
   const spare = Math.round(b.min - est / 60);
   return `<div class="timebox">
@@ -332,8 +344,8 @@ function timeBox(est = 0, T = null) {
     ${b.mode === 'dur'
       ? `<div class="tb-dur"><b data-budget-label>${fmtDur(b.min)}</b><input type="range" min="30" max="90" step="5" value="${b.min}" data-live="budget" aria-label="Tiempo disponible"><div class="tb-scale"><span>30'</span><span>45'</span><span>1 h</span><span>1:15</span><span>1:30</span></div></div>`
       : `<div class="tb-until"><input type="time" value="${b.until}" data-live="until" aria-label="Hora de salida"><span>${fmtDur(b.min)} desde ahora</span></div>`}
-    <p class="small muted">${b.min < 45 ? 'Menos tiempo: quito series y complementarios; lo principal y el core se mantienen.' : b.min > 45 ? 'Más tiempo: series extra en los principales, complementarios y cardio suave al final.' : 'Sesión estándar.'} Durante la sesión recalculo según tu ritmo real.</p>
-    ${spare >= 8 ? `<p class="small tb-spare">Te sobran ${spare}'. ${T?.phase?.key === 'adapt' || T?.phase?.key === 'deload' || T?.plan?.adj?.hold ? `En ${T?.plan?.adj?.hold ? 'una sesión ajustada' : 'fase de ' + T.phase.name.toLowerCase()} no conviene más volumen de fuerza:` : 'Ya está al máximo de volumen útil:'} úsalos para caminar o movilidad.</p>` : ''}
+    ${custom ? `<p class="small muted">Durante la sesión recalculo según tu ritmo real: si vas justo, quito series; nunca añado ejercicios que no hayas elegido.</p>${spare >= 8 ? `<p class="small tb-spare">Te sobran ${spare}': puedes añadir más ejercicios.</p>` : ''}` : `<p class="small muted">${b.min < 45 ? 'Menos tiempo: quito series y complementarios; lo principal y el core se mantienen.' : b.min > 45 ? 'Más tiempo: series extra en los principales, complementarios y cardio suave al final.' : 'Sesión estándar.'} Durante la sesión recalculo según tu ritmo real.</p>
+    ${spare >= 8 ? `<p class="small tb-spare">Te sobran ${spare}'. ${T?.phase?.key === 'adapt' || T?.phase?.key === 'deload' || T?.plan?.adj?.hold ? `En ${T?.plan?.adj?.hold ? 'una sesión ajustada' : 'fase de ' + T.phase.name.toLowerCase()} no conviene más volumen de fuerza:` : 'Ya está al máximo de volumen útil:'} úsalos para caminar o movilidad.</p>` : ''}`}
   </div>`;
 }
 
@@ -555,7 +567,7 @@ function replan(doneItem) {
   A.mark = now;
   const p = projection();
   const left = p.budgetSec - p.elapsed - 20;
-  const ctx = { phase: A.phase, settings: S.settings, mode: A.mode, adj: A.adj };
+  const ctx = { phase: A.phase, settings: S.settings, mode: A.mode, adj: A.adj, onlyRestore: A.template === 'L' }; // a medida: no añado lo que no elegiste
   let r = null;
   if (p.remaining > left + 45) r = P.fitToTime(A.items, left, p.pace);
   else if (left - p.remaining > 300) r = P.expandToTime(A.items, left, ctx, p.pace, 2); // en vivo, como mucho 2 añadidos cada vez
@@ -573,9 +585,13 @@ function startSession(tplKey, pain, type = 'fuerza', adj = null) {
   const phase = C.programPhase(S.sessions, S.profile.startDate, d);
   let mode = type === 'core' ? 'normal' : pain >= 5 ? 'proteccion' : pain >= 3 ? 'suave' : 'normal';
   if (type === 'movilidad' && mode === 'suave') mode = 'normal'; // la sesión de movilidad ya es suave
-  const useAdj = type === 'fuerza' && mode !== 'proteccion' && adj && adj.key !== 'normal' ? adj : null;
+  const custom = tplKey === 'L';
+  const useAdj = (type === 'fuerza' || custom) && mode !== 'proteccion' && adj && adj.key !== 'normal' ? adj : null;
   const B = type === 'core' ? { min: P.MAX_MIN } : budget();
-  const plan = P.buildSession(tplKey, { phase, settings: S.settings, mode, adj: useAdj, budgetMin: B.min });
+  const plan = custom
+    ? P.buildCustom(ui.pick, { phase, settings: S.settings, mode, adj: useAdj, budgetMin: B.min, warm: S.prefs.pickWarm !== false })
+    : P.buildSession(tplKey, { phase, settings: S.settings, mode, adj: useAdj, budgetMin: B.min });
+  if (custom) type = plan.items.some(it => EXERCISES[it.id].group === 'fuerza') ? 'fuerza' : 'movilidad';
   const id = uid();
   const sType = mode === 'proteccion' || type === 'movilidad' ? 'movilidad' : type;
   const hold = !!(phase.hold || mode !== 'normal' || useAdj?.hold);
@@ -587,8 +603,23 @@ function startSession(tplKey, pain, type = 'fuerza', adj = null) {
   ui.inSession = true; ui.sheet = null; ui.another = false;
   acquireWake();
   say(mode === 'proteccion' ? 'Hoy cuidamos la espalda' : 'Vamos allá');
+  if (custom) { LS.set('gymapp.lastPick', ui.pick); ui.pick = []; ui.gen = null; savePick(); }
   render();
   scrollTo(0, 0);
+  if (custom && plan.dropped.length) toast(`Con la espalda en ${pain}/10 quito lo que carga la columna: ${plan.dropped.length} ${plan.dropped.length > 1 ? 'ejercicios' : 'ejercicio'}. Hoy, movilidad y core suave.`, 'down');
+}
+
+// Rutinas generadas (desde una máquina o una zona del gimnasio)
+let genCount = 0;
+const genSeed = () => Math.floor(Date.now() / 864e5) * 10 + genCount++;
+function makeGen() {
+  const g = ui.gen;
+  const ids = g.kind === 'mach' ? LB.machineRoutine(LB.MACHINES.find(x => x.name === g.m), { settings: S.settings, seed: g.seed }) : LB.areaRoutine(g.z, 'all', { settings: S.settings, seed: g.seed });
+  if (!ids.length) { ui.gen = null; toast('No he podido generar la rutina'); return; }
+  const had = ui.pick.length && !ui.pick.every(id => ids.includes(id)) && !g.label;
+  g.label = (g.kind === 'mach' ? `Rutina alrededor de la ${g.m}: el mismo músculo, su antagonista y core, casi todo en la misma zona.` : `Rutina completa en ${LB.SECTIONS.find(x => x.z === g.z).name.toLowerCase()}: empuje, tirón, hombro, brazos y core.`) + (had ? ' Sustituye a la que tenías.' : '');
+  ui.pick = ids; savePick();
+  ui.q = ''; ui.sheet = { type: 'mine' }; render();
 }
 
 function logSet(it, k) {
@@ -889,26 +920,128 @@ function buildReport() {
   return t;
 }
 
-// ───────── EJERCICIOS ─────────
+// ───────── EJERCICIOS (biblioteca por zonas + buscador + rutina a medida) ─────────
 function viewLibrary() {
-  const isAlt = e => SLOT_OF[e.id] && SLOT_OF[e.id] !== e.id;
-  const sections = [
-    ['core', GROUPS.core.name, e => e.group === 'core'],
-    ['fuerza', GROUPS.fuerza.name, e => e.group === 'fuerza' && !isAlt(e)],
-    ['fuerza', 'Alternativas de fuerza (rotan o sustituyen)', e => isAlt(e)],
-    ['warm', GROUPS.warm.name, e => e.group === 'warm'],
-    ['calma', GROUPS.calma.name, e => e.group === 'calma'],
-  ];
-  return `<header class="top"><div><h1>Ejercicios</h1><p class="muted small">${Object.values(EXERCISES).filter(e => e.group !== 'cardio').length} ejercicios. Toca uno para ver cómo se hace</p></div></header>
-  ${sections.map(([g, title, fn]) => `<h2 class="sec-title" style="--c:${GROUPS[g].color}"><i></i>${title}</h2>
-    <div class="lib">${Object.values(EXERCISES).filter(fn).map(e => {
-      const st = P.getSetting(S.settings, e.id);
-      return `<button class="lib-card" data-a="openEx" data-id="${e.id}" style="--c:${GROUPS[g].color}">
-        <div class="thumb">${artSVG(e.art, 1)}</div>
-        <b>${e.name}</b>
-        <small>${st.kg != null && !e.bodyweight && (e.kind === 'reps' || e.kind === 'carry') ? P.fmtKg(st.kg) + ' ' + P.kgUnit(e) : e.levels ? 'Nivel ' + (st.level + 1) : e.muscles[0]}</small>
-      </button>`;
-    }).join('')}</div>`).join('')}`;
+  const total = Object.values(EXERCISES).filter(e => e.zone !== 'cardio').length;
+  return `<header class="top"><div><h1>Ejercicios</h1><p class="muted small">${total} ejercicios · elige los tuyos o busca una máquina</p></div></header>
+  <label class="search">${icon('search')}<input type="search" data-live="q" value="${esc(ui.q)}" placeholder="Chest Press, abdomen, polea…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar máquina o ejercicio"><button type="button" data-a="qClear" aria-label="Borrar búsqueda">${icon('x')}</button></label>
+  ${!ui.pick.length && LS.get('gymapp.lastPick', []).length ? `<button class="btn sm ghost" data-a="pickLast">${icon('list')} Repetir mi última rutina a medida</button>` : ''}
+  <div id="libBody">${libBody()}</div>
+  ${ui.pick.length ? '<div class="tray-space"></div>' + pickTray() : ''}`;
+}
+const libBody = () => ui.q.trim().length >= 2 ? searchView() : sectionView();
+
+function libRow(e) {
+  const on = ui.pick.includes(e.id), tg = TECHNOGYM[e.id];
+  const flag = P.getSetting(S.settings, e.id).backFlags >= 2;
+  const meta = [tg && !/^Esterilla$/.test(tg.name) ? tg.name : null, e.muscles.slice(0, 2).join(', ')].filter(Boolean).join(' · ');
+  return `<div class="lrow ${on ? 'on' : ''}">
+    <button class="lr-main" data-a="openEx" data-id="${e.id}"><span class="thumb">${artSVG(e.art, 1)}</span><span class="lr-txt"><b>${e.name}</b><small>${esc(meta)}</small>${flag ? '<em>Te ha molestado la espalda</em>' : ''}</span></button>
+    ${e.zone === 'cardio' ? '' : `<button class="lr-add" data-a="pick" data-id="${e.id}" aria-pressed="${on}" aria-label="${on ? 'Quitar de' : 'Añadir a'} mi rutina">${icon(on ? 'check' : 'plus')}</button>`}
+  </div>`;
+}
+
+function sectionView() {
+  const z = ui.libZone, list = LB.inSection(z);
+  const areas = Object.keys(AREAS).filter(k => list.some(e => areasOf(e.id).includes(k)));
+  if (ui.libArea !== 'all' && !areas.includes(ui.libArea)) ui.libArea = 'all';
+  const a = ui.libArea, sec = LB.SECTIONS.find(x => x.z === z);
+  const tabs = LB.SECTIONS.map(x => `<button class="sec-tab z-${x.z} ${x.z === z ? 'on' : ''}" data-a="libZone" data-v="${x.z}"><b>${x.name}</b><small>${x.sub}</small><i>${LB.inSection(x.z).length}</i></button>`).join('');
+  const chips = [['all', 'Todo', list.length], ...areas.map(k => [k, AREAS[k].name, LB.inArea(z, k).length])]
+    .map(([k, n, c]) => `<button class="achip ${a === k ? 'on' : ''}" data-a="libArea" data-v="${k}">${n}<i>${c}</i></button>`).join('');
+  let body;
+  if (a === 'all') {
+    body = areas.map(k => { const its = LB.inArea(z, k); return `<details class="lib-group"><summary><span>${AREAS[k].name}</span><i>${its.length}</i></summary><div class="lrows">${its.map(libRow).join('')}</div></details>`; }).join('')
+      + `<button class="btn gen" data-a="areaRoutine">${icon('spark')} Hazme una rutina completa de ${sec.name.toLowerCase()}</button>
+      <p class="small muted center">Empuje, tirón, hombro, brazos y core de esta zona del gimnasio. Cada vez, una combinación distinta.</p>`;
+  } else {
+    const its = LB.inArea(z, a), n = Math.min(its.length, a === 'abdomen' ? 5 : 3);
+    body = `<div class="lrows">${its.map(libRow).join('')}</div>
+      ${its.length > 1 ? `<button class="btn gen" data-a="areaRoutine">${icon('spark')} ${n === its.length ? `Añade los ${n}` : `Añade ${n} variados`} de ${AREAS[a].name.toLowerCase()}</button>` : ''}`;
+  }
+  const hint = a === 'all' && z === 'suelo' && !areas.includes('brazos') ? '<p class="small muted">Para brazos, mira <b>Máquinas</b> o <b>Peso libre</b>.</p>' : '';
+  return `<div class="sec-tabs">${tabs}</div><div class="chips scroll area-chips">${chips}</div>${hint}${body}`;
+}
+
+function searchView() {
+  const r = LB.search(ui.q);
+  const empty = `<p class="empty">No encuentro «${esc(ui.q)}». Prueba con el nombre de la placa de la máquina (Chest Press, Low Row, Lat Machine…), un músculo (pecho, abdomen, cuello) o el material (polea, mancuernas, esterilla, Smith).</p>`;
+  if (!r || (!r.machines.length && !r.warn.length && !r.exs.length)) return empty;
+  const shown = new Set();
+  const mach = r.machines.slice(0, 3).map(m => {
+    const ids = m.ids.filter(id => EXERCISES[id]);
+    const z = zoneOf(ids[0]);
+    ids.forEach(id => shown.add(id));
+    return `<section class="mach z-${z}">
+      <div class="m-head">${icon('pin')}<div><b>${m.name}</b><small>${m.cardio ? 'Cardio' : ids.length + (ids.length === 1 ? ' ejercicio' : ' ejercicios')} · ${ZONES[z].name}</small></div></div>
+      <div class="lrows">${ids.slice(0, 8).map(id => libRow(EXERCISES[id])).join('')}</div>
+      ${ids.length > 8 ? `<p class="small muted">Y ${ids.length - 8} más en la sección ${LB.SECTIONS.find(x => x.z === z)?.name || ''}.</p>` : ''}
+      ${m.cardio ? '' : `<button class="btn primary gen" data-a="machRoutine" data-m="${esc(m.name)}">${icon('spark')} Generar rutina con ${m.zone ? 'esta zona' : 'esta máquina'}</button>`}
+    </section>`;
+  }).join('');
+  const warn = r.warn.map(w => `<section class="mach warn ${w.neutral ? 'neutral' : ''}">
+      <div class="m-head">${icon('warn')}<div><b>${w.name}</b><small>${w.neutral ? 'Fuera de tu programa' : 'No recomendada para tu espalda'}</small></div></div>
+      <p class="small">${w.why}</p>
+      ${w.alt.length ? `<p class="eyebrow">Haz mejor</p><div class="lrows">${w.alt.map(id => libRow(EXERCISES[id])).join('')}</div>` : ''}
+    </section>`).join('');
+  const rest = r.exs.filter(e => !shown.has(e.id) && e.zone !== 'cardio');
+  const exs = rest.length ? `<h2 class="sec-title"><i style="--c:var(--accent)"></i>${r.machines.length || r.warn.length ? 'Otros ejercicios' : 'Ejercicios'} (${rest.length})</h2><div class="lrows">${rest.slice(0, 30).map(libRow).join('')}</div>` : '';
+  return warn + mach + exs;
+}
+
+// Plan de la rutina a medida con el tiempo disponible (o sin límite, para estimar)
+function customPlan(budgetMin = 90, mode = 'normal') {
+  const phase = C.programPhase(S.sessions, S.profile.startDate, P.todayISO());
+  return P.buildCustom(ui.pick, { phase, settings: S.settings, mode, budgetMin, warm: S.prefs.pickWarm !== false });
+}
+function pickTray() {
+  const plan = customPlan(), n = ui.pick.length, est = Math.round(P.estimateTotal(plan.items) / 60);
+  return `<div class="tray">
+    <button class="tray-main" data-a="sheet" data-s="mine"><b>Mi rutina · ${n} ${n === 1 ? 'ejercicio' : 'ejercicios'}</b><small>≈ ${est}' · ${[...new Set(plan.items.map(i => zoneOf(i.id)))].filter(z => z !== 'cardio').map(z => ZONES[z].short).join(' → ')}</small></button>
+    <button class="btn primary sm" data-a="sheet" data-s="mine">Ver y empezar</button>
+  </div>`;
+}
+
+// Consejos del entrenador sobre lo elegido
+function pickTips(plan, B) {
+  const tips = [];
+  const bal = LB.balance(ui.pick);
+  if (bal.push > bal.pull + 1) tips.push(`Llevas ${bal.push} ejercicios de empuje y ${bal.pull} de tirón. Para unos hombros sanos, añade un remo o un jalón.`);
+  else if (bal.pull > bal.push + 2) tips.push(`Mucho tirón (${bal.pull}) y poco empuje (${bal.push}): si quieres equilibrar, añade un press.`);
+  if (!ui.pick.some(id => areasOf(id).some(a => a === 'abdomen' || a === 'lumbar'))) tips.push('Tu informe pide potenciar el core: añade al menos un ejercicio de abdomen o lumbar.');
+  const flagged = ui.pick.filter(id => P.getSetting(S.settings, id).backFlags >= 2);
+  if (flagged.length) tips.push(`${flagged.map(id => EXERCISES[id].name).join(', ')}: te ${flagged.length > 1 ? 'han' : 'ha'} molestado la espalda últimamente. Si notas algo, cámbialo.`);
+  const big = ui.pick.filter(id => EXERCISES[id].group === 'fuerza').length;
+  if (big > 7) tips.push(`${big} ejercicios de fuerza es mucho para un día: mejor repártelos en dos sesiones.`);
+  const full = Math.round(P.estimateTotal(customPlan(90).items) / 60);
+  if (full > B.min) tips.push(`Con ${fmtDur(B.min)} no cabe todo (${full}'): quitaré series y, si hace falta, lo último que no sea principal ni core.`);
+  return tips;
+}
+
+function mineSheet() {
+  const B = budget();
+  if (!ui.pick.length) return `<h2>Mi rutina a medida</h2><p class="muted">Aún no has elegido ejercicios. En <b>Ejercicios</b> pulsa <b>+</b> en los que quieras o genera una rutina desde una máquina.</p><button class="btn" data-a="closeSheet">Cerrar</button>`;
+  const plan = customPlan(B.min);
+  const est = P.estimateTotal(plan.items);
+  const mine = new Set(ui.pick);
+  const tips = pickTips(plan, B);
+  const cut = ui.pick.filter(id => !plan.items.some(i => i.id === id));
+  return `<h2>Mi rutina a medida</h2>
+    ${ui.gen ? `<p class="muted small">${esc(ui.gen.label)}</p>` : '<p class="muted small">La ordeno por zonas para que no vayas y vuelvas.</p>'}
+    ${zoneRoute(plan.items)}
+    <ol class="mine-list">${zoneRuns(plan.items).map(r => `<li class="zone-h z-${r.z}">${ZONES[r.z].name}</li>` + r.items.map(i => `<li style="--c:${GROUPS[i.g].color}">
+      <span class="ml-txt"><b>${EXERCISES[i.id].name}</b><small>${setsSummary(i)}${mine.has(i.id) ? '' : ' · <em>lo añado yo</em>'}</small></span>
+      ${mine.has(i.id) ? `<button class="icon-btn sm" data-a="pick" data-id="${i.id}" aria-label="Quitar ${esc(EXERCISES[i.id].name)}">${icon('x')}</button>` : ''}
+    </li>`).join('')).join('')}</ol>
+    ${cut.length ? `<p class="small warn-line">${icon('clock')} No caben con este tiempo: ${cut.map(id => EXERCISES[id].name).join(', ')}.</p>` : ''}
+    <label class="toggle"><input type="checkbox" data-a="pref" data-k="pickWarm" ${S.prefs.pickWarm !== false ? 'checked' : ''}><span>Calentamiento, activación lumbar y paseo final (recomendado)</span></label>
+    ${tips.length ? `<div class="adj">${tips.map(t => `<p>${t}</p>`).join('')}</div>` : ''}
+    ${timeBox(est, null, true)}
+    <button class="btn primary xl" data-a="pickStart">${icon('play')} Empezar · ${Math.round(est / 60)}' · fin ${hhmm(new Date(Date.now() + est * 1000))}</button>
+    <div class="row2">
+      ${ui.gen ? `<button class="btn sm" data-a="regen">${icon('shuffle')} Otra combinación</button>` : ''}
+      <button class="btn sm ghost" data-a="pickClear">Vaciar</button>
+    </div>`;
 }
 
 // Aviso al llegar a un ejercicio de otra zona (antes de empezarlo)
@@ -956,6 +1089,7 @@ function viewExercise(id) {
     <div class="art-wrap" data-anim="${id}" data-a="slowmo">${artSVG(ex.art, 0, 'big')}${slowBadge(ex)}</div>
     <h1 class="ex-name">${ex.name}</h1>
     ${whereBox(id)}
+    ${ex.zone !== 'cardio' && !S.active ? `<button class="btn ${ui.pick.includes(id) ? '' : 'primary'} sm" data-a="pick" data-id="${id}">${icon(ui.pick.includes(id) ? 'check' : 'plus')} ${ui.pick.includes(id) ? 'En mi rutina a medida (quitar)' : 'Añadir a mi rutina a medida'}</button>` : ''}
     <div class="chips">${ex.muscles.map(m => `<span class="chip">${m}</span>`).join('')}</div>
     <p class="why">${ex.why}</p>
     <section class="card">
@@ -1029,7 +1163,7 @@ function viewProfile() {
     <p>Para y consulta con tu médico si notas dolor que baja por la pierna, hormigueo, pérdida de fuerza o dolor que empeora durante la sesión. La app no sustituye a tu médico ni a tu fisioterapeuta.</p>
   </section>
   <button class="btn ghost sm" data-a="export">Exportar mis datos (JSON)</button>
-  <p class="muted small center ver">App Gym · v1.6</p>`;
+  <p class="muted small center ver">App Gym · v1.7</p>`;
 }
 
 function weekPrefsCard() {
@@ -1102,6 +1236,9 @@ function viewSheet() {
   let body = '';
   const T = S.profile ? todayInfo() : null;
   switch (s.type) {
+    case 'mine':
+      body = mineSheet();
+      break;
     case 'pain':
       body = `<h2>¿Cómo está tu espalda ahora?</h2><p class="muted">0 = nada · 10 = dolor máximo. Con esto adapto la sesión.</p>
       <div class="painpad">${[...Array(11)].map((_, i) => `<button class="pain p${i}" data-a="painGo" data-v="${i}">${i}</button>`).join('')}</div>
@@ -1238,6 +1375,7 @@ const actions = {
   painGo: d => {
     const v = +d.v;
     const T = todayInfo();
+    if (ui.sheet?.custom) return startSession('L', v, 'custom', T.plan.adj);
     if (T.choice === 'movilidad') startSession('M', v, 'movilidad');
     else startSession(T.tpl, v, 'fuerza', T.plan.adj);
   },
@@ -1415,6 +1553,35 @@ const actions = {
     catch (e) { prompt('Copia este texto:', t); }
   },
   openEx: d => { ui.ex = d.id; render(); scrollTo(0, 0); },
+  libZone: d => { ui.libZone = d.v; ui.libArea = 'all'; LS.set('gymapp.libZone', d.v); render(); },
+  libArea: d => { ui.libArea = d.v; render(); },
+  qClear: () => { ui.q = ''; render(); app.querySelector('[data-live="q"]')?.focus(); },
+  pick: d => {
+    const on = ui.pick.includes(d.id);
+    ui.pick = on ? ui.pick.filter(x => x !== d.id) : [...ui.pick, d.id];
+    if (on && ui.gen) ui.gen = { ...ui.gen, edited: true };
+    savePick();
+    if (!ui.sheet && !ui.ex) toast(on ? `Quitado: ${EXERCISES[d.id].name}` : `Añadido a tu rutina (${ui.pick.length})`);
+    else render();
+  },
+  pickLast: () => { ui.pick = LS.get('gymapp.lastPick', []).filter(id => EXERCISES[id]); ui.gen = null; savePick(); ui.sheet = { type: 'mine' }; render(); },
+  pickClear: () => { ui.pick = []; ui.gen = null; savePick(); ui.sheet = null; render(); },
+  pickStart: () => { ui.sheet = { type: 'pain', custom: true }; render(); },
+  machRoutine: d => {
+    const m = LB.MACHINES.find(x => x.name === d.m);
+    if (!m) return;
+    ui.gen = { kind: 'mach', m: m.name, seed: genSeed(), label: '' };
+    makeGen();
+  },
+  areaRoutine: () => {
+    const z = ui.libZone, a = ui.libArea;
+    if (a === 'all') { ui.gen = { kind: 'zone', z, seed: genSeed(), label: '' }; makeGen(); return; }
+    const ids = LB.areaRoutine(z, a, { settings: S.settings, seed: genSeed(), n: a === 'abdomen' ? 5 : 3 });
+    const added = ids.filter(id => !ui.pick.includes(id));
+    ui.pick = [...ui.pick, ...added]; savePick();
+    toast(added.length ? `Añadidos ${added.length} de ${AREAS[a].name.toLowerCase()} (${LB.SECTIONS.find(x => x.z === z).name.toLowerCase()})` : 'Ya los tenías todos');
+  },
+  regen: () => { if (!ui.gen) return; ui.gen.seed++; makeGen(); },
   closeEx: () => { ui.ex = null; render(); },
   delSession: d => {
     if (!confirm('¿Borrar esta sesión del historial?')) return;
@@ -1443,7 +1610,7 @@ const actions = {
     m.kg = kg; S.profile.weightKg = kg;
     enqueue('metric', m.id); enqueue('profile', 'me'); save(); toast('Peso registrado'); render();
   },
-  pref: (d, el) => { S.prefs[d.k] = el.checked; save(); enqueue('profile', 'me'); if (d.k === 'music') render(); },
+  pref: (d, el) => { S.prefs[d.k] = el.checked; save(); enqueue('profile', 'me'); if (d.k === 'music' || d.k === 'pickWarm') render(); },
   restart: () => { S.profile.startDate = P.todayISO(); enqueue('profile', 'me'); save(); ui.sheet = null; toast('Programa reiniciado: semana 1'); },
   export: () => {
     const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
@@ -1485,6 +1652,7 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('input', e => {
+  if (e.target.dataset.live === 'q') { ui.q = e.target.value; const b = app.querySelector('#libBody'); if (b) b.innerHTML = libBody(); return; }
   if (e.target.dataset.live === 'budget') { const l = app.querySelector('[data-budget-label]'); if (l) l.textContent = fmtDur(+e.target.value); }
 });
 app.addEventListener('change', e => {

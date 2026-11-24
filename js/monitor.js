@@ -27,6 +27,11 @@ const MAP = {
   elev_laterales: { hombro: 1 }, laterales_maquina: { hombro: 1 }, laterales_polea: { hombro: 1 },
   curl_maquina: { brazos: 1 }, curl_mancuernas_inclinado: { brazos: 1 }, curl_polea: { brazos: 1 },
   triceps_polea: { brazos: 1 }, triceps_maquina: { brazos: 1 }, triceps_unilateral: { brazos: 1 },
+  flexiones_rodillas: PUSH, press_pecho_unilateral: PUSH, press_suelo_mancuernas: PUSH, aperturas_mancuernas: { pecho: 1 }, cruce_poleas_bajo: { pecho: 1 },
+  remo_banco_inclinado: PULL, pullover_polea: { espalda: 1 },
+  pajaros_polea: { hombro: 1, espalda: 0.5 }, rotacion_externa_polea: { hombro: 1 }, angeles_suelo: { hombro: 0.5, espalda: 0.5 },
+  curl_martillo_polea: { brazos: 1 }, curl_martillo_sentado: { brazos: 1 }, triceps_tumbado: { brazos: 1 }, patada_triceps: { brazos: 1 },
+  encogimientos: { espalda: 0.5 }, retraccion_cervical: {}, isometrico_cuello: {}, estiramiento_flexor: {}, estiramiento_pectoral: {},
 };
 const musclesOf = id => MAP[id] || (EXERCISES[id]?.group === 'core' ? { core: 1 } : {});
 

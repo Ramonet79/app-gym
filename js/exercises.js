@@ -11,6 +11,7 @@ const cable = (x, y, w) => L(x, y, w[0], w[1], 1.6, 'cable');
 const grip = w => C(w[0], w[1], 4.5, 'hi');
 const lever = (x, y, w) => L(x, y, w[0], w[1], 5, 'mline') + grip(w);
 const db = w => R(w[0] - 8, w[1] - 2, 16, 4, 'hi', 1.5) + R(w[0] - 11, w[1] - 6, 5, 12, 'hi', 1.5) + R(w[0] + 6, w[1] - 6, 5, 12, 'hi', 1.5);
+const dbv = w => R(w[0] - 2, w[1] - 9, 4, 18, 'hi', 1.5) + R(w[0] - 6, w[1] - 12, 12, 5, 'hi', 1.5) + R(w[0] - 6, w[1] + 7, 12, 5, 'hi', 1.5);
 const rope = w => L(w[0] - 4, w[1] - 3, w[0] + 4, w[1] + 3, 3, 'hiline');
 
 const MAT = R(4, 147, 192, 4, 'mat', 2);
@@ -578,6 +579,346 @@ export const EXERCISES = {
     },
   },
 
+  // ───────── BIBLIOTECA AMPLIADA (v1.7): más variedad por zona del gimnasio y del cuerpo ─────────
+  // Esterilla · abdomen
+  heel_taps: {
+    name: 'Toques de talón boca arriba', group: 'core', kind: 'reps', sets: 2, reps: [8, 10], perSide: true, rest: 30, bodyweight: true,
+    machine: 'Esterilla', muscles: ['Transverso abdominal', 'Recto abdominal'],
+    setup: ['Boca arriba, rodillas a 90º y espinillas paralelas al suelo', 'Brazos en el suelo a los lados', 'Zona lumbar apoyada suave, sin aplastarla'],
+    cues: ['Baja un talón a tocar el suelo en 2-3 s sin abrir la rodilla', 'Vuelve arriba y alterna', 'Exhala al bajar'],
+    avoid: ['Que la lumbar se arquee al bajar la pierna', 'Dejar caer la pierna sin control'],
+    why: 'La versión más sencilla del dead bug: el abdomen profundo trabaja para que la pelvis no se mueva. Buena para empezar o para días con la espalda cargada.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [40, 138], s: [54, 141], hp: [104, 142], e: [72, 146], w: [90, 145], k: [106, 114], a: [130, 114], k2: [106, 114], a2: [130, 114] },
+      B: { k: [124, 124], a: [134, 146] },
+    },
+  },
+  oso: {
+    name: 'Oso (rodillas suspendidas)', group: 'core', kind: 'hold', sets: 2, hold: 20, rest: 30, maxHold: 40,
+    machine: 'Esterilla', muscles: ['Core anterior', 'Transverso abdominal', 'Hombros'],
+    setup: ['A cuatro patas: manos bajo hombros, rodillas bajo caderas', 'Dedos de los pies apoyados'],
+    cues: ['Despega las rodillas solo 2-3 cm del suelo', 'Espalda plana como una mesa', 'Respira corto sin soltar el abdomen'],
+    avoid: ['Subir el culo', 'Hundir la zona lumbar', 'Aguantar el aire'],
+    why: 'Plancha corta y muy segura: el core trabaja fuerte con la columna neutra y casi sin compresión. Buen paso previo a la plancha frontal.',
+    art: {
+      vb: '0 82 200 76', back: MAT, dur: 3000,
+      A: { face: 1, h: [126, 104], s: [112, 113], hp: [68, 114], e: [112, 131], w: [112, 147], e2: [112, 131], w2: [112, 147], k: [70, 146], a: [42, 144], f: [38, 148], k2: [70, 146], a2: [42, 144], f2: [38, 148] },
+      B: { hp: [70, 110], k: ik([70, 110], [42, 144], 32, 28, 1), k2: ik([70, 110], [42, 144], 32, 28, 1) },
+    },
+  },
+  bracing: {
+    name: 'Bracing tumbado (core activo)', group: 'core', kind: 'holdreps', sets: 2, reps: 5, hold: 10, rest: 30,
+    machine: 'Esterilla', muscles: ['Transverso abdominal', 'Oblicuos', 'Core anterior'],
+    setup: ['Boca arriba, rodillas dobladas, pies apoyados', 'Una mano sobre el abdomen'],
+    cues: ['Tensa el abdomen al 30 % como si fueran a darte un toque en la tripa', 'Respira normal SIN soltar la tensión', 'La lumbar no se mueve: ni se aplasta ni se arquea'],
+    avoid: ['Meter la tripa hacia dentro (es tensar, no hundir)', 'Aguantar la respiración'],
+    why: 'Es la base de McGill: aprender a "rigidizar" el tronco protege el disco en cualquier esfuerzo (coger peso, empujar, toser). Lo usarás en todos los demás ejercicios.',
+    art: {
+      vb: '0 82 200 76', back: MAT, dur: 3600,
+      A: { face: 1, h: [26, 140], s: [42, 142], sp: [63, 142], hp: [84, 142], k: [108, 116], a: [118, 146], f: [127, 146], e: [60, 146], w: [72, 135] },
+      B: { sp: [63, 139], w: [72, 132] },
+    },
+  },
+  plancha_alta_toques: {
+    name: 'Plancha alta con toque de hombro', group: 'core', kind: 'reps', sets: 2, reps: [6, 10], perSide: true, rest: 30, bodyweight: true,
+    machine: 'Esterilla', muscles: ['Core anti-rotación', 'Oblicuos', 'Hombros'],
+    setup: ['Plancha sobre las manos, manos bajo los hombros', 'Pies algo separados (más separados = más fácil)', 'Para empezar: con las rodillas apoyadas'],
+    cues: ['Toca el hombro contrario despacio', 'La cadera NO se balancea', 'Aprieta glúteos y abdomen'],
+    avoid: ['Girar la cadera al levantar la mano', 'Hundir la zona lumbar'],
+    why: 'Anti-rotación con tu peso: el abdomen impide que el tronco gire. Fortalece el core como lo necesitas en la vida real.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [139, 103], s: [124, 108], hp: [80, 124], k: [54, 133], a: [28, 143], f: [25, 148], e2: [122, 128], w2: [122, 147], e: [126, 128], w: [126, 147] },
+      B: { e: [140, 124], w: [125, 110] },
+    },
+  },
+  // Esterilla · pecho
+  flexiones_rodillas: {
+    name: 'Flexiones con rodillas apoyadas', group: 'fuerza', kind: 'reps', sets: 3, reps: [8, 12], rest: 60, bodyweight: true,
+    machine: 'Esterilla', muscles: ['Pectoral', 'Tríceps', 'Core'],
+    setup: ['Rodillas en la esterilla, manos algo más abiertas que los hombros', 'Cuerpo recto de rodillas a cabeza'],
+    cues: ['Baja el pecho en bloque en 2 s', 'Codos a 45º del cuerpo, no abiertos en cruz', 'Empuja el suelo exhalando'],
+    avoid: ['Dejar caer la cadera', 'Adelantar la cabeza'],
+    why: 'Empuje sin máquinas y con el core trabajando como una plancha. Cuando hagas 12 fáciles, pasa a flexiones inclinadas o a apoyar los pies.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [138, 98], s: [124, 106], hp: [82, 132], k: [60, 146], a: [36, 134], f: [31, 129], e: [125, 126], w: [126, 147] },
+      B: { h: [148, 128], s: [134, 133], hp: [84, 141], e: [118, 130] },
+    },
+  },
+  // Esterilla · lumbar y glúteo
+  puente_una_pierna: {
+    name: 'Puente de glúteo a una pierna', group: 'core', kind: 'reps', sets: 2, reps: [8, 10], perSide: true, rest: 30, bodyweight: true,
+    sideLabels: ['Apoyo pie derecho', 'Apoyo pie izquierdo'],
+    machine: 'Esterilla', muscles: ['Glúteo mayor', 'Glúteo medio', 'Isquiotibiales'],
+    setup: ['Boca arriba, un pie apoyado cerca del glúteo', 'La otra pierna estirada, a la altura del muslo contrario'],
+    cues: ['Empuja con el talón y sube la cadera', 'Cadera nivelada: que no caiga hacia el lado libre', 'Aguanta 2 s arriba'],
+    avoid: ['Arquear la lumbar para subir más', 'Girar la pelvis'],
+    why: 'Más glúteo y más estabilidad de pelvis que el puente normal. Un glúteo fuerte descarga la zona lumbar.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [26, 140], s: [42, 142], hp: [84, 142], k: [108, 116], a: [118, 146], f: [127, 146], e: [62, 146], w: [82, 146], k2: [104, 120], a2: [125, 98] },
+      B: { hp: [84, 124], k: [112, 112], k2: [112, 112], a2: [139, 101] },
+    },
+  },
+  patada_cuadrupedia: {
+    name: 'Patada de glúteo a cuatro patas', group: 'core', kind: 'reps', sets: 2, reps: [10, 12], perSide: true, rest: 30, bodyweight: true,
+    machine: 'Esterilla', muscles: ['Glúteo mayor', 'Multífido'],
+    setup: ['A cuatro patas, espalda neutra', 'Abdomen activo (bracing) antes de mover la pierna'],
+    cues: ['Sube la pierna con la rodilla doblada, planta del pie al techo', 'Solo hasta que el muslo quede horizontal', 'Baja despacio sin apoyar'],
+    avoid: ['Subir de más arqueando la lumbar', 'Girar la cadera hacia el lado'],
+    why: 'Glúteo aislado con la columna quieta. Complementa al bird-dog y al puente.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [126, 104], s: [112, 113], hp: [68, 114], e: [112, 131], w: [112, 147], e2: [112, 131], w2: [112, 147], k: [70, 146], a: [40, 147], k2: [70, 146], a2: [40, 147] },
+      B: { k: [39, 116], a: [37, 88] },
+    },
+  },
+  // Esterilla · cuello y postura
+  retraccion_cervical: {
+    name: 'Retracción cervical (doble mentón)', group: 'postura', kind: 'holdreps', sets: 2, reps: 8, hold: 5, rest: 20,
+    machine: 'Banco o silla (también de pie contra la pared)', muscles: ['Flexores profundos del cuello', 'Postura'],
+    setup: ['Sentado erguido, mirada al frente', 'Hombros relajados'],
+    cues: ['Lleva la cabeza hacia atrás en horizontal, haciendo "doble mentón"', 'Sin mirar abajo ni arriba', 'Aguanta 5 s y suelta'],
+    avoid: ['Inclinar la cabeza hacia abajo', 'Forzar hasta notar dolor'],
+    why: 'Corrige la cabeza adelantada de estar sentado o con el móvil. Descarga la nuca y los trapecios.',
+    art: {
+      back: SEAT, dur: 3000,
+      A: { ...SEATED, h: [75, 56], e: [78, 94], w: [96, 104] },
+      B: { h: [68, 57] },
+    },
+  },
+  isometrico_cuello: {
+    name: 'Isométricos de cuello con la mano', group: 'postura', kind: 'holdreps', sets: 2, reps: 4, hold: 8, rest: 20,
+    repLabels: ['Mano en la frente', 'Mano en la nuca', 'Mano en el lado derecho', 'Mano en el lado izquierdo'],
+    machine: 'Banco o silla', muscles: ['Músculos del cuello', 'Postura'],
+    setup: ['Sentado erguido, barbilla ligeramente recogida', 'Una mano contra la cabeza'],
+    cues: ['Empuja la cabeza contra la mano al 30-50 %', 'La cabeza NO se mueve: la mano frena', 'Cada repetición, en una dirección: frente, nuca, derecha, izquierda'],
+    avoid: ['Empujar fuerte de golpe', 'Aguantar la respiración'],
+    why: 'Fortalece el cuello sin movimiento ni carga: seguro y eficaz para la rigidez cervical.',
+    art: {
+      back: SEAT, dur: 3000,
+      A: { ...SEATED, e: [90, 74], w: [85, 51], e2: [78, 94], w2: [96, 104] },
+      B: { w: [83, 52], h: [73, 56] },
+    },
+  },
+  angeles_suelo: {
+    name: 'Ángeles en el suelo', group: 'postura', kind: 'reps', sets: 2, reps: [8, 10], rest: 30, bodyweight: true,
+    machine: 'Esterilla', muscles: ['Trapecio medio e inferior', 'Deltoides posterior', 'Postura'],
+    setup: ['Boca arriba, rodillas dobladas, lumbar apoyada suave', 'Brazos en "W": codos y dorso de las manos tocando el suelo'],
+    cues: ['Desliza los brazos hacia arriba hasta formar una "Y"', 'Codos y manos rozando el suelo todo el rato', 'Vuelve a la "W" juntando escápulas'],
+    avoid: ['Arquear la lumbar para llegar más arriba', 'Despegar los codos'],
+    why: 'Abre el pecho y activa la espalda alta. Compensa los hombros caídos hacia delante sin ninguna carga.',
+    art: {
+      vb: '0 2 200 128', label: 'Vista desde arriba · boca arriba',
+      back: R(56, 6, 88, 124, 'mat', 8),
+      A: { h: [100, 44], n: [100, 58], pc: [100, 106], sl: [84, 62], sr: [116, 62], hl: [91, 110], hr: [109, 110], kl: [88, 136], al: [87, 160], kr: [112, 136], ar: [113, 160], el: [62, 70], wl: [58, 48], er: [138, 70], wr: [142, 48] },
+      B: { el: [70, 42], wl: [60, 20], er: [130, 42], wr: [140, 20] },
+    },
+  },
+  // Movilidad y estiramientos (al final)
+  estiramiento_flexor: {
+    name: 'Estiramiento de psoas en semi-rodilla', group: 'calma', kind: 'hold', sets: 1, hold: 30, perSide: true, rest: 0,
+    sideLabels: ['Rodilla izquierda en el suelo', 'Rodilla derecha en el suelo'],
+    machine: 'Esterilla', muscles: ['Psoas', 'Flexores de cadera'],
+    setup: ['Una rodilla en la esterilla y el otro pie delante (90º)', 'Tronco erguido, manos en la cadera o el muslo'],
+    cues: ['Aprieta el glúteo de la pierna de atrás', 'Lleva la cadera un poco hacia delante', 'Notas el estiramiento delante de la cadera, no en la lumbar'],
+    avoid: ['Arquear la lumbar para llegar más lejos', 'Inclinarte hacia delante'],
+    why: 'El psoas acortado tira de las vértebras lumbares, sobre todo tras horas sentado. Estirarlo con el glúteo activo alivia L5-S1.',
+    art: {
+      back: MAT,
+      A: { face: 1, h: [99, 63], s: [97, 78], hp: [96, 116], k: [124, 116], a: [125, 146], f: [134, 147], k2: [88, 146], a2: [60, 146], f2: [56, 142], e: [104, 96], w: [116, 110] },
+      B: { h: [104, 64], s: [102, 79], hp: [102, 117], e: [109, 97], w: [121, 111] },
+    },
+  },
+  estiramiento_pectoral: {
+    name: 'Estiramiento de pectoral en poste', group: 'calma', kind: 'hold', sets: 1, hold: 30, perSide: true, rest: 0,
+    sideLabels: ['Brazo derecho', 'Brazo izquierdo'],
+    machine: 'Poste de una máquina o marco de puerta', muscles: ['Pectoral', 'Hombro anterior'],
+    setup: ['Antebrazo apoyado en un poste, codo a la altura del hombro', 'Un pie adelantado'],
+    cues: ['Da un paso al frente hasta notar el estiramiento en el pecho', 'Hombro abajo y atrás', 'Respira lento'],
+    avoid: ['Forzar el hombro', 'Arquear la espalda'],
+    why: 'Abre el pecho y relaja los hombros adelantados. Buen final para un día de empuje.',
+    art: {
+      back: R(70, 4, 7, 146),
+      A: { ...standing(100, 1), e: [82, 50], w: [80, 30] },
+      B: { h: [107, 36], s: [105, 51], hp: [101, 88] },
+    },
+  },
+
+  // Máquinas
+  press_pecho_unilateral: {
+    name: 'Press de pecho a una mano en máquina', group: 'fuerza', kind: 'reps', sets: 3, reps: [10, 12], perSide: true, rest: 60, startKg: 12.5, incKg: 2.5,
+    sideLabels: ['Brazo derecho', 'Brazo izquierdo'],
+    machine: 'Máquina de press de pecho (sentado), un brazo cada vez', muscles: ['Pectoral', 'Tríceps', 'Core anti-rotación'],
+    setup: ['Como el press de pecho, pero empuja solo con un brazo', 'La otra mano en el asa sin empujar o sobre el muslo'],
+    cues: ['El tronco no gira hacia el lado que empuja', 'Espalda pegada al respaldo', 'Vuelve en 2 s'],
+    avoid: ['Girar los hombros', 'Despegar la espalda'],
+    why: 'Igual que el press de pecho pero cada lado por separado: corrige desequilibrios y obliga al core a evitar el giro.',
+  },
+  cruce_poleas_bajo: {
+    name: 'Aperturas en polea de abajo a arriba', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], rest: 60, startKg: 5, incKg: 2.5,
+    machine: 'Cruce de poleas con las poleas abajo', muscles: ['Pectoral superior', 'Hombro anterior'],
+    setup: ['Poleas en la posición más baja', 'Un pie adelantado, rodillas algo flexionadas, abdomen firme'],
+    cues: ['Sube las manos en arco hasta juntarlas a la altura del pecho alto', 'Codos ligeramente doblados y fijos', 'Baja despacio'],
+    avoid: ['Echar el cuerpo atrás para subir', 'Encoger los hombros'],
+    why: 'Pectoral superior con carga ligera y columna neutra.',
+    art: {
+      label: 'Vista de frente',
+      back: R(10, 8, 8, 142) + R(182, 8, 8, 142) + C(22, 140, 4) + C(178, 140, 4),
+      A: { h: [100, 30], n: [100, 44], pc: [100, 92], sl: [84, 48], sr: [116, 48], hl: [91, 96], hr: [109, 96], kl: [88, 122], al: [84, 148], kr: [112, 122], ar: [116, 148], el: [70, 72], wl: [56, 94], er: [130, 72], wr: [144, 94] },
+      B: { el: [78, 68], wl: [96, 60], er: [122, 68], wr: [104, 60] },
+      dyn: p => cable(22, 140, p.wl) + cable(178, 140, p.wr) + grip(p.wl) + grip(p.wr),
+    },
+  },
+  pullover_polea: {
+    name: 'Pullover en polea alta (brazos rectos)', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], rest: 60, startKg: 10, incKg: 2.5,
+    machine: 'Polea alta con barra recta o cuerda', muscles: ['Dorsal ancho', 'Redondo mayor', 'Core anti-extensión'],
+    setup: ['De pie frente a la polea, a un paso largo', 'Inclínate un poco desde la cadera con la espalda recta', 'Brazos casi estirados'],
+    cues: ['Baja la barra en arco hasta los muslos', 'Brazos rectos: el movimiento sale del hombro', 'Costillas abajo, abdomen firme'],
+    avoid: ['Doblar los codos (se convierte en tríceps)', 'Arquear la lumbar al subir'],
+    why: 'Aísla el dorsal sin carga en la columna. Muy bueno para notar la espalda antes de jalones y remos.',
+    art: {
+      back: R(150, 4, 12, 146) + C(148, 12, 4),
+      A: { ...standing(98, 1), h: [111, 38], s: [106, 52], e: [127, 45], w: [147, 37] },
+      B: { e: [108, 73], w: [110, 94] },
+      dyn: p => cable(148, 12, p.w) + L(p.w[0] - 6, p.w[1] + 3, p.w[0] + 6, p.w[1] - 3, 4, 'hiline'),
+    },
+  },
+  rotacion_externa_polea: {
+    name: 'Rotación externa en polea', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], perSide: true, rest: 45, startKg: 2.5, incKg: 1.25,
+    sideLabels: ['Brazo derecho (polea a tu izquierda)', 'Brazo izquierdo (polea a tu derecha)'],
+    machine: 'Polea a la altura del codo con agarre de una mano', muscles: ['Manguito rotador', 'Deltoides posterior'],
+    setup: ['De lado a la polea, agarre con la mano más lejana', 'Codo a 90º pegado al costado (una toalla enrollada entre codo y cuerpo ayuda)'],
+    cues: ['Gira el antebrazo hacia fuera como una puerta', 'El codo no se separa del cuerpo', 'Peso muy ligero, recorrido lento'],
+    avoid: ['Separar el codo', 'Girar el tronco'],
+    why: 'Salud del hombro: el manguito rotador estabiliza la articulación en todos los empujes y tirones. Clave a partir de los 40.',
+    art: {
+      vb: '0 36 200 100', label: 'Vista desde arriba',
+      back: R(8, 60, 16, 38) + C(28, 80, 4),
+      A: { h: [100, 70], sl: [82, 70], sr: [118, 70], el: [80, 80], wl: [86, 92], er: [120, 80], wr: [104, 94] },
+      B: { wr: [139, 93] },
+      dyn: p => cable(28, 80, p.wr) + grip(p.wr),
+    },
+  },
+  curl_martillo_polea: {
+    name: 'Curl martillo con cuerda en polea', group: 'fuerza', kind: 'reps', sets: 2, reps: [10, 12], rest: 60, startKg: 12.5, incKg: 2.5,
+    machine: 'Polea baja con cuerda', muscles: ['Braquial', 'Bíceps', 'Antebrazo'],
+    setup: ['De pie frente a la polea, a un paso', 'Cuerda con las palmas enfrentadas', 'Rodillas algo flexionadas'],
+    cues: ['Codos pegados al cuerpo', 'Sube con las palmas mirándose', 'Baja despacio'],
+    avoid: ['Echar el cuerpo atrás', 'Mover los codos'],
+    why: 'Trabaja el braquial y el antebrazo, que dan grosor al brazo y fuerza de agarre para los remos.',
+  },
+  pajaros_polea: {
+    name: 'Pájaros en polea cruzada', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], rest: 60, startKg: 2.5, incKg: 1.25,
+    machine: 'Cruce de poleas, poleas a la altura de los hombros, sin agarre (cogiendo el cable)', muscles: ['Deltoides posterior', 'Romboides', 'Trapecio medio'],
+    setup: ['Cada mano coge el cable de la polea contraria (se cruzan delante)', 'Pies a la anchura de cadera, rodillas algo flexionadas'],
+    cues: ['Abre los brazos hacia atrás a la altura de los hombros', 'Codos casi estirados', 'Junta escápulas 1 s y vuelve despacio'],
+    avoid: ['Encoger los hombros', 'Echar el tronco atrás'],
+    why: 'Hombro posterior y postura con tensión constante y cero carga en la columna.',
+    art: {
+      label: 'Vista de frente',
+      back: R(10, 8, 8, 142) + R(182, 8, 8, 142) + C(22, 48, 4) + C(178, 48, 4),
+      A: { h: [100, 30], n: [100, 44], pc: [100, 92], sl: [84, 48], sr: [116, 48], hl: [91, 96], hr: [109, 96], kl: [88, 122], al: [84, 148], kr: [112, 122], ar: [116, 148], el: [96, 60], wl: [114, 56], er: [104, 60], wr: [86, 56] },
+      B: { el: [62, 50], wl: [40, 52], er: [138, 50], wr: [160, 52] },
+      dyn: p => cable(178, 48, p.wl) + cable(22, 48, p.wr) + grip(p.wl) + grip(p.wr),
+    },
+  },
+  pallof_rodillas: {
+    name: 'Pallof press de rodillas', group: 'core', kind: 'reps', sets: 2, reps: [8, 10], perSide: true, rest: 30, startKg: 5, incKg: 2.5,
+    sideLabels: ['Polea a tu derecha', 'Polea a tu izquierda'],
+    machine: 'Polea a la altura del pecho estando de rodillas', muscles: ['Oblicuos', 'Core anti-rotación', 'Glúteo'],
+    setup: ['De rodillas sobre una esterilla, de lado a la polea', 'Tronco erguido, glúteos apretados'],
+    cues: ['Empuja al frente y aguanta 2 s', 'No dejes que la polea te gire', 'Vuelve al pecho despacio'],
+    avoid: ['Sentarte sobre los talones', 'Arquear la lumbar'],
+    why: 'Como el Pallof de pie, pero sin poder ayudarte con las piernas: el core trabaja más.',
+  },
+
+  // Peso libre
+  aperturas_mancuernas: {
+    name: 'Aperturas con mancuernas en banco', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], rest: 60, startKg: 6, incKg: 1, perHand: true,
+    machine: 'Banco plano + mancuernas ligeras', muscles: ['Pectoral'],
+    setup: ['Tumbado en el banco, mancuernas arriba con las palmas enfrentadas', 'Pies en el suelo o en el banco si la lumbar se arquea'],
+    cues: ['Abre los brazos en arco con los codos algo doblados', 'Baja solo hasta la altura del pecho', 'Sube "abrazando un árbol"'],
+    avoid: ['Bajar de más (estresa el hombro)', 'Estirar del todo los codos'],
+    why: 'Pectoral aislado tumbado: cero carga en la columna. Peso por mancuerna.',
+    art: {
+      label: 'Vista desde los pies',
+      back: R(80, 103, 40, 7) + R(94, 110, 12, 38) + R(80, 145, 40, 5, 'm', 2),
+      A: { h: [100, 88], sl: [82, 96], sr: [118, 96], el: [61, 100], wl: [42, 96], er: [139, 100], wr: [158, 96] },
+      B: { el: [87, 74], wl: [96, 54], er: [113, 74], wr: [104, 54] },
+      dyn: p => db(p.wl) + db(p.wr),
+    },
+  },
+  press_suelo_mancuernas: {
+    name: 'Press de suelo con mancuernas', group: 'fuerza', kind: 'reps', sets: 3, reps: [10, 12], rest: 75, startKg: 10, incKg: 1, perHand: true,
+    machine: 'Esterilla + mancuernas', muscles: ['Pectoral', 'Tríceps'],
+    setup: ['Tumbado en la esterilla, rodillas dobladas', 'Mancuernas sobre el pecho, codos apoyados en el suelo'],
+    cues: ['Empuja hacia arriba hasta estirar los brazos', 'Baja hasta que los codos rocen el suelo', 'Pausa 1 s abajo, sin rebotar'],
+    avoid: ['Coger las mancuernas del suelo con la espalda redonda (siéntate primero)', 'Abrir los codos en cruz'],
+    why: 'El suelo limita el recorrido y protege el hombro; la espalda está entera apoyada. Ideal si los bancos están ocupados.',
+    art: {
+      vb: '0 82 200 76', back: MAT,
+      A: { face: 1, h: [26, 140], s: [42, 142], hp: [84, 142], k: [108, 116], a: [118, 146], f: [127, 146], e: [58, 146], w: [58, 124] },
+      B: { e: [43, 120], w: [44, 98] },
+      dyn: p => db(p.w),
+    },
+  },
+  remo_banco_inclinado: {
+    name: 'Remo con mancuernas en banco inclinado', group: 'fuerza', kind: 'reps', sets: 3, reps: [10, 12], rest: 75, startKg: 10, incKg: 1, perHand: true,
+    machine: 'Banco inclinado a 30-45º + mancuernas', muscles: ['Dorsal', 'Romboides', 'Trapecio medio', 'Bíceps'],
+    setup: ['Boca abajo en el banco inclinado, pecho apoyado', 'Pies en el suelo, brazos colgando'],
+    cues: ['Lleva los codos atrás hacia el techo', 'Junta escápulas 1 s', 'Baja estirando los brazos'],
+    avoid: ['Despegar el pecho del banco', 'Encoger los hombros'],
+    why: 'Remo con el pecho apoyado y peso libre: la columna no trabaja. El equivalente libre de la Low Row.',
+  },
+  curl_martillo_sentado: {
+    name: 'Curl martillo sentado con respaldo', group: 'fuerza', kind: 'reps', sets: 2, reps: [10, 12], rest: 60, startKg: 8, incKg: 1, perHand: true,
+    machine: 'Banco con respaldo vertical + mancuernas', muscles: ['Braquial', 'Bíceps', 'Antebrazo'],
+    setup: ['Sentado con la espalda apoyada', 'Mancuernas con las palmas enfrentadas'],
+    cues: ['Sube sin mover los codos', 'Palmas mirándose todo el recorrido', 'Baja en 2-3 s'],
+    avoid: ['Despegar la espalda para dar impulso'],
+    why: 'Brazo y antebrazo con la espalda apoyada. Peso por mancuerna.',
+  },
+  triceps_tumbado: {
+    name: 'Extensión de tríceps tumbado con mancuernas', group: 'fuerza', kind: 'reps', sets: 2, reps: [10, 12], rest: 60, startKg: 5, incKg: 1, perHand: true,
+    machine: 'Banco plano + mancuernas', muscles: ['Tríceps'],
+    setup: ['Tumbado en el banco, brazos estirados sobre los hombros', 'Palmas enfrentadas'],
+    cues: ['Dobla solo los codos y baja las mancuernas junto a la cabeza', 'Los codos apuntan al techo y no se abren', 'Estira y aprieta 1 s'],
+    avoid: ['Mover los hombros', 'Arquear la lumbar'],
+    why: 'Tríceps tumbado: la columna descansa sobre el banco. Peso por mancuerna.',
+    art: {
+      back: R(30, 104, 100, 8) + R(40, 112, 6, 36) + R(114, 112, 6, 36),
+      A: { h: [42, 96], s: [58, 100], hp: [96, 100], k: [122, 110], a: [126, 145], f: [135, 147], e: [54, 76], w: [36, 90] },
+      B: { w: [52, 54] },
+      dyn: p => db(p.w),
+    },
+  },
+  patada_triceps: {
+    name: 'Patada de tríceps apoyado en banco', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], perSide: true, rest: 45, startKg: 4, incKg: 1,
+    machine: 'Banco plano + mancuerna', muscles: ['Tríceps'],
+    setup: ['Rodilla y mano del mismo lado en el banco, espalda plana', 'Brazo de trabajo con el codo pegado al costado'],
+    cues: ['Estira el codo llevando la mancuerna atrás', 'El brazo (hombro-codo) no se mueve', 'Aprieta 1 s'],
+    avoid: ['Balancear el brazo', 'Girar el tronco'],
+    why: 'Tríceps con el tronco sujeto por el banco: sin carga en la lumbar.',
+  },
+  encogimientos: {
+    name: 'Encogimientos con mancuernas sentado', group: 'fuerza', kind: 'reps', sets: 2, reps: [12, 15], rest: 60, startKg: 10, incKg: 2, perHand: true,
+    machine: 'Banco con respaldo + mancuernas', muscles: ['Trapecio superior', 'Cuello'],
+    setup: ['Sentado con la espalda apoyada', 'Brazos colgando, mancuernas a los lados'],
+    cues: ['Sube los hombros hacia las orejas en vertical', 'Aguanta 1 s y baja despacio', 'Cuello largo, mirada al frente'],
+    avoid: ['Girar los hombros en círculo', 'Hacerlo de pie con mucho peso (comprime la columna)'],
+    why: 'Trapecio superior y cuello fuertes, sentado para no comprimir la zona lumbar. Peso por mancuerna.',
+    art: {
+      label: 'Vista de frente',
+      back: R(70, 111, 60, 8) + R(76, 119, 6, 29) + R(118, 119, 6, 29) + R(76, 60, 48, 52, 'm', 6),
+      A: { h: [100, 38], n: [100, 52], pc: [100, 104], sl: [84, 56], sr: [116, 56], hl: [91, 108], hr: [109, 108], kl: [88, 120], al: [86, 148], kr: [112, 120], ar: [114, 148], el: [80, 80], wl: [80, 101], er: [120, 80], wr: [120, 101] },
+      B: { sl: [84, 49], sr: [116, 49], el: [80, 73], wl: [80, 94], er: [120, 73], wr: [120, 94] },
+      dyn: p => db(p.wl) + db(p.wr),
+    },
+  },
+
   // ───────── VUELTA A LA CALMA ─────────
   caminar: {
     name: 'Paseo + respiración', group: 'calma', kind: 'time', minutes: 2,
@@ -633,6 +974,12 @@ X.jalon_neutro.art = { ...X.jalon.art, dyn: p => cable(82, 8, p.w) + grip(p.w) }
 X.press_inclinado_mancuernas.art = { ...X.press_inclinado.art, back: L(62, 114, 42, 58, 9) + SEAT, dyn: p => db(p.w) };
 X.remo_polea_unilateral.art = { ...X.remo_polea.art, A: { ...X.remo_polea.art.A, e2: [70, 100], w2: [86, 104] } };
 X.triceps_unilateral.art = { ...X.triceps_polea.art, dyn: p => cable(136, 12, p.w) + grip(p.w) };
+X.press_pecho_unilateral.art = { ...X.press_pecho.art, A: { ...X.press_pecho.art.A, e2: [74, 94], w2: [92, 104] } };
+X.curl_martillo_polea.art = { ...X.curl_polea.art, dyn: p => cable(148, 140, p.w) + rope(p.w) };
+X.pallof_rodillas.art = { ...X.pallof.art, label: 'Vista desde arriba · de rodillas' };
+X.remo_banco_inclinado.art = { ...X.y_inclinado.art, B: { e: [72, 90], w: [76, 112] } };
+X.curl_martillo_sentado.art = { back: R(53, 36, 9, 80) + SEAT, A: { ...SEATED, e: [72, 94], w: [74, 116] }, B: { w: [92, 82] }, dyn: p => dbv(p.w) };
+X.patada_triceps.art = { ...X.remo_mancuerna.art, A: { ...X.remo_mancuerna.art.A, e: [84, 82], w: [86, 104] }, B: { w: [62, 84] } };
 
 for (const [id, e] of Object.entries(EXERCISES)) e.id = id;
 
@@ -675,6 +1022,32 @@ const STEPS = {
   triceps_unilateral: ['Estira abajo', 'Sube hasta 90º', 'Codo quieto'],
   laterales_maquina: ['Codos hacia fuera', 'Baja despacio', 'Hombros abajo'],
   laterales_polea: ['Sube al lado', 'Baja en 2-3 s', 'Tronco quieto'],
+  heel_taps: ['Baja el talón (2-3 s)', 'Vuelve arriba', 'Lumbar quieta'],
+  oso: ['Despega las rodillas', 'Apoya suave', 'Espalda plana'],
+  bracing: ['Tensa el abdomen', 'Suelta', 'Respira sin soltar'],
+  plancha_alta_toques: ['Toca el hombro', 'Apoya la mano', 'Cadera quieta'],
+  flexiones_rodillas: ['Empuja el suelo', 'Baja en bloque (2 s)', 'Cuerpo recto'],
+  puente_una_pierna: ['Sube con el talón', 'Baja despacio', 'Cadera nivelada 2 s'],
+  patada_cuadrupedia: ['Planta del pie al techo', 'Baja sin apoyar', 'Lumbar quieta'],
+  retraccion_cervical: ['Cabeza atrás', 'Suelta', 'Doble mentón 5 s'],
+  isometrico_cuello: ['Empuja contra la mano', 'Suelta', 'La cabeza no se mueve'],
+  angeles_suelo: ['Desliza a la Y', 'Vuelve a la W', 'Codos rozando el suelo'],
+  estiramiento_flexor: ['Cadera al frente', 'Vuelve', 'Glúteo apretado'],
+  estiramiento_pectoral: ['Paso al frente', 'Vuelve', 'Respira lento'],
+  press_pecho_unilateral: ['Empuja con un brazo', 'Vuelve en 2 s', 'Tronco sin girar'],
+  cruce_poleas_bajo: ['Sube en arco', 'Baja despacio', 'Codos fijos'],
+  pullover_polea: ['Baja en arco', 'Sube controlando', 'Brazos rectos'],
+  rotacion_externa_polea: ['Gira hacia fuera', 'Vuelve despacio', 'Codo pegado'],
+  curl_martillo_polea: ['Sube', 'Baja despacio', 'Palmas enfrentadas'],
+  pajaros_polea: ['Abre atrás', 'Vuelve despacio', 'Junta escápulas 1 s'],
+  pallof_rodillas: ['Empuja al frente', 'Vuelve al pecho', 'Aguanta 2 s sin girar'],
+  aperturas_mancuernas: ['Junta arriba', 'Abre en arco', 'Codos algo doblados'],
+  press_suelo_mancuernas: ['Empuja arriba', 'Baja a rozar el suelo', 'Pausa 1 s abajo'],
+  remo_banco_inclinado: ['Codos al techo', 'Baja estirando', 'Pecho apoyado'],
+  curl_martillo_sentado: ['Sube', 'Baja en 2-3 s', 'Palmas enfrentadas'],
+  triceps_tumbado: ['Estira los brazos', 'Baja junto a la cabeza', 'Codos al techo'],
+  patada_triceps: ['Estira atrás', 'Vuelve a 90º', 'Brazo quieto'],
+  encogimientos: ['Hombros a las orejas', 'Baja despacio', 'Aguanta 1 s'],
 };
 for (const e of Object.values(EXERCISES)) {
   if (!e.art) continue;
@@ -683,24 +1056,25 @@ for (const e of Object.values(EXERCISES)) {
 }
 EXERCISES.remo_invertido.art.flip = true;
 // La guía sigue la cabeza cuando se mueve el cuerpo entero
-for (const id of ['dominada_asistida', 'remo_invertido', 'flexiones_inclinadas']) EXERCISES[id].art.guide = 'h';
-for (const id of ['puente', 'plancha_lateral']) EXERCISES[id].art.guide = 'hp';
+for (const id of ['dominada_asistida', 'remo_invertido', 'flexiones_inclinadas', 'flexiones_rodillas']) EXERCISES[id].art.guide = 'h';
+for (const id of ['puente', 'plancha_lateral', 'puente_una_pierna', 'oso', 'estiramiento_flexor']) EXERCISES[id].art.guide = 'hp';
+for (const id of ['patada_cuadrupedia', 'heel_taps']) EXERCISES[id].art.guide = 'a';
 
 // ───── Variantes por patrón de movimiento ─────
 // El primero de cada lista es el ejercicio base (máquina guiada: el mejor para aprender).
 // Ejercicios principales: cambian cada 2 bloques (12 semanas). Accesorios: cada bloque (6 semanas).
 // El core de McGill no rota: es tu base terapéutica; progresa por niveles.
 export const ALTERNATIVES = {
-  press_pecho: ['press_mancuernas', 'flexiones_inclinadas'],
-  remo_pecho: ['remo_mancuerna', 'remo_invertido'],
+  press_pecho: ['press_mancuernas', 'flexiones_inclinadas', 'press_suelo_mancuernas', 'press_pecho_unilateral'],
+  remo_pecho: ['remo_mancuerna', 'remo_invertido', 'remo_banco_inclinado'],
   press_hombro: ['press_hombro_mancuernas'],
-  face_pull: ['pajaros_maquina', 'y_inclinado'],
+  face_pull: ['pajaros_maquina', 'y_inclinado', 'pajaros_polea', 'rotacion_externa_polea'],
   jalon: ['jalon_neutro', 'dominada_asistida'],
   press_inclinado: ['press_inclinado_mancuernas'],
   remo_polea: ['remo_polea_unilateral', 'remo_mancuerna'],
-  pec_deck: ['cruce_poleas'],
-  curl_maquina: ['curl_mancuernas_inclinado', 'curl_polea'],
-  triceps_polea: ['triceps_maquina', 'triceps_unilateral'],
+  pec_deck: ['cruce_poleas', 'aperturas_mancuernas', 'cruce_poleas_bajo'],
+  curl_maquina: ['curl_mancuernas_inclinado', 'curl_polea', 'curl_martillo_sentado', 'curl_martillo_polea'],
+  triceps_polea: ['triceps_maquina', 'triceps_unilateral', 'triceps_tumbado', 'patada_triceps'],
   elev_laterales: ['laterales_maquina', 'laterales_polea'],
 };
 export const MAIN_LIFTS = new Set(['press_pecho', 'remo_pecho', 'jalon', 'press_inclinado', 'remo_polea', 'press_hombro']);
@@ -712,6 +1086,7 @@ export const GROUPS = {
   warm: { name: 'Calentamiento', short: 'Calentar', color: 'var(--c-warm)' },
   core: { name: 'Core y zona lumbar', short: 'Core', color: 'var(--c-core)' },
   fuerza: { name: 'Fuerza tren superior', short: 'Fuerza', color: 'var(--c-fuerza)' },
+  postura: { name: 'Postura y cuello', short: 'Postura', color: 'var(--c-postura)' },
   calma: { name: 'Vuelta a la calma', short: 'Calma', color: 'var(--c-calma)' },
   cardio: { name: 'Cardio', short: 'Cardio', color: 'var(--c-cardio)' },
 };
@@ -725,10 +1100,14 @@ export const ZONES = {
 };
 const ZONE_OF = {
   cardio: ['eliptica', 'caminar', 'spinning', 'cardio_z2'],
-  suelo: ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal'],
+  suelo: ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal',
+    'heel_taps', 'oso', 'bracing', 'plancha_alta_toques', 'flexiones_rodillas', 'puente_una_pierna', 'patada_cuadrupedia',
+    'retraccion_cervical', 'isometrico_cuello', 'angeles_suelo', 'estiramiento_flexor', 'estiramiento_pectoral'],
   maquinas: ['pallof', 'press_pecho', 'remo_pecho', 'press_hombro', 'face_pull', 'jalon', 'press_inclinado', 'remo_polea', 'pec_deck', 'curl_maquina', 'triceps_polea',
-    'pajaros_maquina', 'jalon_neutro', 'dominada_asistida', 'remo_polea_unilateral', 'cruce_poleas', 'curl_polea', 'triceps_maquina', 'triceps_unilateral', 'laterales_maquina', 'laterales_polea'],
-  libre: ['carry', 'elev_laterales', 'press_mancuernas', 'flexiones_inclinadas', 'remo_mancuerna', 'remo_invertido', 'press_hombro_mancuernas', 'y_inclinado', 'press_inclinado_mancuernas', 'curl_mancuernas_inclinado'],
+    'pajaros_maquina', 'jalon_neutro', 'dominada_asistida', 'remo_polea_unilateral', 'cruce_poleas', 'curl_polea', 'triceps_maquina', 'triceps_unilateral', 'laterales_maquina', 'laterales_polea',
+    'press_pecho_unilateral', 'cruce_poleas_bajo', 'pullover_polea', 'rotacion_externa_polea', 'curl_martillo_polea', 'pajaros_polea', 'pallof_rodillas'],
+  libre: ['carry', 'elev_laterales', 'press_mancuernas', 'flexiones_inclinadas', 'remo_mancuerna', 'remo_invertido', 'press_hombro_mancuernas', 'y_inclinado', 'press_inclinado_mancuernas', 'curl_mancuernas_inclinado',
+    'aperturas_mancuernas', 'press_suelo_mancuernas', 'remo_banco_inclinado', 'curl_martillo_sentado', 'triceps_tumbado', 'patada_triceps', 'encogimientos'],
 };
 for (const [z, ids] of Object.entries(ZONE_OF)) for (const id of ids) if (EXERCISES[id]) EXERCISES[id].zone = z;
 // Si en tu gimnasio un ejercicio está en otra zona, se corrige desde la ficha del ejercicio (se guarda en tus preferencias).
@@ -775,5 +1154,51 @@ export const TECHNOGYM = {
   curl_mancuernas_inclinado: { name: 'Banco regulable + mancuernas', what: 'respaldo a 45-60º' },
   elev_laterales: { name: 'Banco regulable + mancuernas', what: 'respaldo vertical' },
   carry: { name: 'Mancuerna', what: 'pasillo libre de la zona de peso libre' },
+  press_pecho_unilateral: { name: 'Chest Press', what: 'press de pecho, un brazo cada vez' },
+  cruce_poleas_bajo: { name: 'Crossover', what: 'las dos poleas en la posición más baja' },
+  pullover_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea alta con barra recta (también vale la Lat Machine, de pie)' },
+  rotacion_externa_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea a la altura del codo, agarre de una mano' },
+  curl_martillo_polea: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea baja con cuerda' },
+  pajaros_polea: { name: 'Crossover', what: 'las dos poleas a la altura de los hombros' },
+  pallof_rodillas: { name: 'Crossover o Dual Adjustable Pulley', what: 'polea a la altura del pecho estando de rodillas' },
+  aperturas_mancuernas: { name: 'Banco plano + mancuernas', what: 'zona de peso libre' },
+  press_suelo_mancuernas: { name: 'Esterilla + mancuernas', what: 'zona de peso libre' },
+  remo_banco_inclinado: { name: 'Banco regulable + mancuernas', what: 'respaldo a 30-45º, boca abajo' },
+  curl_martillo_sentado: { name: 'Banco regulable + mancuernas', what: 'respaldo vertical' },
+  triceps_tumbado: { name: 'Banco plano + mancuernas', what: 'tumbado boca arriba' },
+  patada_triceps: { name: 'Banco plano + mancuerna', what: 'rodilla y mano en el banco' },
+  encogimientos: { name: 'Banco regulable + mancuernas', what: 'respaldo vertical' },
 };
-for (const id of ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal']) TECHNOGYM[id] = { name: 'Esterilla', what: 'zona de estiramientos o funcional' };
+for (const id of ['gato_camello', 'bird_dog', 'plancha_lateral', 'curl_up', 'dead_bug', 'puente', 'plancha_frontal', 'heel_taps', 'oso', 'bracing', 'plancha_alta_toques',
+  'flexiones_rodillas', 'puente_una_pierna', 'patada_cuadrupedia', 'angeles_suelo', 'estiramiento_flexor']) TECHNOGYM[id] = { name: 'Esterilla', what: 'zona de estiramientos o funcional' };
+TECHNOGYM.retraccion_cervical = TECHNOGYM.isometrico_cuello = { name: 'Banco o silla', what: 'cualquier banco de la sala' };
+TECHNOGYM.estiramiento_pectoral = { name: 'Poste de una máquina', what: 'o el marco de una puerta' };
+
+// ───── Zonas del cuerpo (para la biblioteca y el buscador) ─────
+export const AREAS = {
+  pecho: { name: 'Pecho', kw: 'pecho pectoral pectorales' },
+  espalda: { name: 'Espalda', kw: 'espalda dorsal dorsales' },
+  hombro: { name: 'Hombro', kw: 'hombro hombros deltoides' },
+  brazos: { name: 'Brazos', kw: 'brazo brazos biceps triceps antebrazo' },
+  abdomen: { name: 'Abdomen', kw: 'abdomen abdominales abdominal abs tripa barriga core oblicuos' },
+  lumbar: { name: 'Lumbar y glúteo', kw: 'lumbar lumbares gluteo gluteos culo cadera multifido' },
+  cuello: { name: 'Cuello y trapecio', kw: 'cuello cervical cervicales trapecio nuca' },
+  movilidad: { name: 'Movilidad', kw: 'movilidad estirar estiramiento estiramientos flexibilidad' },
+};
+const AREA_OF = {
+  pecho: ['press_pecho', 'press_inclinado', 'pec_deck', 'press_mancuernas', 'flexiones_inclinadas', 'press_inclinado_mancuernas', 'cruce_poleas',
+    'flexiones_rodillas', 'press_pecho_unilateral', 'cruce_poleas_bajo', 'aperturas_mancuernas', 'press_suelo_mancuernas'],
+  espalda: ['remo_pecho', 'jalon', 'remo_polea', 'remo_mancuerna', 'remo_invertido', 'jalon_neutro', 'dominada_asistida', 'remo_polea_unilateral',
+    'pullover_polea', 'remo_banco_inclinado', 'face_pull', 'pajaros_maquina', 'y_inclinado', 'pajaros_polea', 'angeles_suelo'],
+  hombro: ['press_hombro', 'press_hombro_mancuernas', 'elev_laterales', 'laterales_maquina', 'laterales_polea', 'face_pull', 'pajaros_maquina', 'y_inclinado',
+    'pajaros_polea', 'rotacion_externa_polea', 'press_inclinado', 'angeles_suelo'],
+  brazos: ['curl_maquina', 'curl_mancuernas_inclinado', 'curl_polea', 'triceps_polea', 'triceps_maquina', 'triceps_unilateral',
+    'curl_martillo_polea', 'curl_martillo_sentado', 'triceps_tumbado', 'patada_triceps'],
+  abdomen: ['curl_up', 'dead_bug', 'plancha_frontal', 'plancha_lateral', 'bird_dog', 'pallof', 'carry', 'heel_taps', 'oso', 'bracing', 'plancha_alta_toques', 'pallof_rodillas'],
+  lumbar: ['bird_dog', 'puente', 'puente_una_pierna', 'patada_cuadrupedia', 'plancha_lateral'],
+  cuello: ['retraccion_cervical', 'isometrico_cuello', 'encogimientos', 'face_pull'],
+  movilidad: ['gato_camello', 'estiramiento_flexor', 'estiramiento_pectoral', 'eliptica', 'caminar'],
+};
+const AREAS_BY_ID = {};
+for (const [a, ids] of Object.entries(AREA_OF)) for (const id of ids) (AREAS_BY_ID[id] = AREAS_BY_ID[id] || []).push(a);
+export const areasOf = id => AREAS_BY_ID[id] || [];

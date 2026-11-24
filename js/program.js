@@ -1,5 +1,5 @@
 // Programa: plantillas, calendario semanal, fases, construcción de sesión y progresión.
-import { EXERCISES, ALTERNATIVES, MAIN_LIFTS, optionsFor, zoneOf } from './exercises.js';
+import { EXERCISES, ALTERNATIVES, MAIN_LIFTS, SLOT_OF, optionsFor, zoneOf } from './exercises.js';
 
 export const MAX_MIN = 45;
 
@@ -38,6 +38,10 @@ export const TEMPLATES = {
       { g: 'core', items: ['bird_dog', 'curl_up', 'puente'] },
       { g: 'calma', items: ['caminar'] },
     ],
+  },
+  L: { // rutina a medida: el usuario elige los ejercicios en la biblioteca
+    name: 'Rutina a tu medida', subtitle: 'Ejercicios elegidos por ti',
+    blocks: [],
   },
   X: { // core exprés para días de spinning
     name: 'Core exprés', subtitle: '6 minutos después del spinning',
@@ -128,6 +132,33 @@ export function buildSession(tplKey, { phase, settings, mode = 'normal', adj = n
   else if (remainingEstimate(items) > lim) fitToTime(items, lim);
   const out = orderByZone(items.filter(it => !it.trimmed));
   return { template: mode === 'proteccion' ? 'M' : tplKey, items: out };
+}
+
+// ───── rutina a medida ─────
+// Lo elegido en la biblioteca + (opcional) calentamiento, activación lumbar y paseo final. Mismas reglas de
+// seguridad que el programa: con dolor ≥5 solo queda lo que no carga la columna; con 3-4, sesión suave.
+export const SAFE_ON_PAIN = new Set(['gato_camello', 'bird_dog', 'curl_up', 'dead_bug', 'puente', 'heel_taps', 'bracing', 'retraccion_cervical', 'angeles_suelo', 'estiramiento_flexor', 'estiramiento_pectoral', 'caminar', 'eliptica']);
+export function buildCustom(ids, { phase, settings, mode = 'normal', adj = null, budgetMin = MAX_MIN, warm = true }) {
+  let chosen = ids.filter(id => EXERCISES[id]);
+  if (mode === 'proteccion') chosen = chosen.filter(id => SAFE_ON_PAIN.has(id));
+  const list = [];
+  const add = (id, g) => { if (!list.some(x => x.id === id)) list.push({ id, g }); };
+  if (warm || mode === 'proteccion') {
+    add('eliptica', 'warm'); add('gato_camello', 'warm');
+    if (!chosen.some(id => ['bird_dog', 'dead_bug', 'curl_up'].includes(id))) add('bird_dog', 'core');
+  }
+  for (const id of chosen) { const g = EXERCISES[id].group; add(id, g === 'cardio' ? 'cardio' : g); }
+  if (mode === 'proteccion' && !list.some(x => x.g === 'core')) { add('curl_up', 'core'); add('puente', 'core'); }
+  if (warm || mode === 'proteccion') add('caminar', 'calma');
+  const items = list.filter(x => !(mode === 'suave' && getSetting(settings, x.id).backFlags >= 2))
+    .map(x => buildItem(x.id, { slot: SLOT_OF[x.id] || x.id, g: x.g, phase, settings, mode, adj }));
+  const lim = (budgetMin - 1) * 60;
+  if (remainingEstimate(items) > lim) fitToTime(items, lim);
+  const out = orderByZone(items.filter(it => !it.trimmed));
+  // serie de aproximación en el primer ejercicio con carga
+  const first = out.find(it => EXERCISES[it.id].group === 'fuerza' && it.sets[0]?.kg);
+  if (first) out[out.indexOf(first)] = buildItem(first.id, { slot: first.slot, g: first.g, phase, settings, mode, adj, first: true, nSets: first.sets.filter(s => !s.warmup && !s.skipped).length });
+  return { template: 'L', items: out, dropped: ids.filter(id => !chosen.includes(id)) };
 }
 
 // ───── orden por zonas ─────
@@ -287,7 +318,7 @@ export function fitToTime(items, limitSec, pace = 1) {
 // 2) accesorios que equilibran (hombro posterior, brazos, laterales, core), 3) cardio suave en zona 2 al final.
 const namesText = (ids, verb) => !ids.length ? '' : ids.length <= 2 ? `${verb} ${ids.map(id => EXERCISES[id].name.toLowerCase()).join(' y ')}` : `${verb} ${ids.length} ejercicios`;
 const EXTRA_POOL = ['face_pull', 'curl_maquina', 'triceps_polea', 'elev_laterales', 'pec_deck', 'pallof'];
-export function expandToTime(items, limitSec, { phase, settings, mode = 'normal', adj = null }, pace = 1, maxAdds = Infinity) {
+export function expandToTime(items, limitSec, { phase, settings, mode = 'normal', adj = null, onlyRestore = false }, pace = 1, maxAdds = Infinity) {
   const need = () => remainingEstimate(items) * pace;
   const log = { sets: 0, items: [], back: [] };
   let adds = 0;
@@ -298,7 +329,7 @@ export function expandToTime(items, limitSec, { phase, settings, mode = 'normal'
     if (!fits(estimateItem(it))) continue;
     it.status = 'todo'; it.trimmed = false; adds++; log.back.push(it.id);
   }
-  const strengthOk = mode === 'normal' && !adj?.hold && !phase.hold;
+  const strengthOk = mode === 'normal' && !adj?.hold && !phase.hold && !onlyRestore;
   const insertAt = () => { const k = items.findIndex(it => it.g === 'calma' && it.status === 'todo'); return k < 0 ? items.length : k; };
   if (strengthOk) {
     // 1) series extra en principales
@@ -329,7 +360,7 @@ export function expandToTime(items, limitSec, { phase, settings, mode = 'normal'
     }
   }
   // 3) cardio suave al final (también en días suaves)
-  if (!items.some(it => it.id === 'cardio_z2' && it.status === 'todo')) {
+  if (!onlyRestore && !items.some(it => it.id === 'cardio_z2' && it.status === 'todo')) {
     const spare = (limitSec - need()) / pace / 60;
     if (spare >= 8 && adds < maxAdds) {
       const mins = Math.min(30, Math.floor(spare - 1.5));
@@ -444,7 +475,8 @@ export function guidedSteps(id, set) {
     if (ex.kind === 'hold' || ex.kind === 'carry') steps.push({ label: side || 'Aguanta', sub: ex.kind === 'carry' ? 'Camina erguido' : 'Aguanta', secs: set.hold, work: true, say: si === 0 ? 'Empezamos' : null });
     if (ex.kind === 'holdreps') {
       for (let r = 1; r <= set.reps; r++) {
-        steps.push({ label: `Rep ${r} de ${set.reps}`, sub: side || 'Aguanta arriba', secs: set.hold, work: true, say: r === 1 ? (side || 'Empezamos') : String(r) });
+        const rl = ex.repLabels?.[(r - 1) % ex.repLabels.length];
+        steps.push({ label: `Rep ${r} de ${set.reps}`, sub: rl || side || 'Aguanta arriba', secs: set.hold, work: true, say: rl || (r === 1 ? (side || 'Empezamos') : String(r)) });
         if (r < set.reps) steps.push({ label: 'Baja y respira', sub: side || '', secs: 2, work: false });
       }
     }
